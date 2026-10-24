@@ -9,25 +9,96 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
 jobs:
+  workflows:
+    name: Workflow validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Validate workflows with pinned actionlint
+        run: |
+          curl --fail --location --retry 3 --output "$RUNNER_TEMP/actionlint.tar.gz" \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  $RUNNER_TEMP/actionlint.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/actionlint.tar.gz" -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+
   core:
     name: Compiler and DSP (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-24.04, macos-14]
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - run: cmake --preset dev
       - run: cmake --build --preset dev --parallel 2
-      - run: ctest --preset dev
+      - run: ctest --preset dev --output-junit results.xml
+      - name: Preserve test diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: core-${{ matrix.os }}-diagnostics
+          path: |
+            build/results.xml
+            build/Testing/Temporary/*.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+  sanitizers:
+    name: Memory and undefined behavior
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CC: clang
+      CXX: clang++
+      ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+      UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Configure instrumented compiler, DSP and realtime sessions
+        run: >-
+          cmake --preset dev
+          -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer"
+          -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
+      - run: cmake --build --preset dev --parallel 2
+      - run: ctest --preset dev --output-junit results.xml
+      - name: Preserve sanitizer diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sanitizer-diagnostics
+          path: |
+            build/results.xml
+            build/Testing/Temporary/*.log
+          retention-days: 14
+          if-no-files-found: ignore
 
   editor:
     name: Editor and publication checks
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
@@ -37,7 +108,6 @@ jobs:
       - run: npm audit --prefix ui --audit-level=high
       - run: npm run build --prefix ui
       - name: UI regression checks
-        shell: bash
         run: |
           for flows_test in ui/test/*.test.mjs; do
             if [[ "$flows_test" != ui/test/languageCompiler.test.mjs ]]; then
@@ -49,17 +119,50 @@ jobs:
   macos:
     name: macOS app and plugins
     runs-on: macos-26
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - name: Fetch pinned JUCE
-        run: git clone --branch 8.0.7 --depth 1 https://github.com/juce-framework/JUCE.git ../JUCE
+      - name: Fetch and verify pinned JUCE
+        run: bash .github/scripts/fetch-juce.sh
       - run: npm ci --prefix ui
       - run: cmake --preset app -DJUCE_DIR="$PWD/../JUCE" -DCMAKE_OSX_ARCHITECTURES=arm64
       - run: cmake --build --preset app --parallel 2
       - name: Native tests without interactive windows
-        run: ctest --preset app -E 'window_startup|editor_layout'
+        run: ctest --preset app -E 'window_startup|editor_layout' --output-junit results.xml
+      - name: Preserve native test diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-diagnostics
+          path: |
+            build-app/results.xml
+            build-app/Testing/Temporary/*.log
+          retention-days: 14
+          if-no-files-found: ignore
+
+  ci:
+    name: CI
+    if: ${{ always() }}
+    needs: [workflows, core, sanitizers, editor, macos]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every job to pass
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['JOB_RESULTS'])
+          failed = [name for name, job in results.items() if job['result'] != 'success']
+          if failed:
+              raise SystemExit('Required jobs did not pass: ' + ', '.join(failed))
+          print('All required checks passed.')
+          PY

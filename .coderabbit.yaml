@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+tone_instructions: >-
+  Be concise and specific. Prioritize reproducible correctness, audio safety and
+  user-visible regressions. Explain the triggering case and impact. Avoid praise,
+  speculative warnings, cosmetic rewrites and tests that only mirror code.
+early_access: false
+inheritance: false
+reviews:
+  profile: chill
+  auto_approvals:
+    enabled: false
+  allow_author_approval: false
+  high_level_summary: true
+  high_level_summary_in_walkthrough: true
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  poem: false
+  in_progress_fortune: false
+  suggested_labels: false
+  auto_apply_labels: false
+  suggested_reviewers: false
+  auto_assign_reviewers: false
+  review_status: true
+  review_progress: true
+  fail_commit_status: true
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 0
+  path_filters:
+    - "!ui/package-lock.json"
+    - "!third_party/**"
+    - "!**/*.png"
+    - "!**/*.icns"
+    - "!**/*.wav"
+  path_instructions:
+    - path: "src/engine/**"
+      instructions: >-
+        Check finite output, stereo correctness, voice identity and note release,
+        envelope completion, sample bounds, smoothing and block-size invariance.
+        Audio callbacks must not allocate, lock, perform IO or compile. Preserve
+        intentional signal semantics; do not add gates or change gain merely to
+        make a test silent. Require a concrete DSP or realtime failure scenario.
+    - path: "src/compiler/**"
+      instructions: >-
+        Check parsing, type/unit rules, source spans, diagnostics and unsafe input
+        limits. Language changes must agree with examples, reference documentation,
+        editor completion and host parameter metadata. Reject invalid programs
+        without leaving the interface playing stale code.
+    - path: "src/host/app/**"
+      instructions: >-
+        Review audio/message/worker thread ownership, bounded queues, program
+        replacement, stale revisions, voice release and audition routing. Preserve
+        unsaved documents and isolate tests from real workspaces, keychains and
+        audio devices. For AI and imports, check path confinement, explicit user
+        intent, secret redaction and stale edits. Saving must not select the
+        sounding program; the current valid editor source does.
+    - path: "ui/src/**"
+      instructions: >-
+        Check UTF-16 offsets, CodeMirror virtualized lines and cursor alignment,
+        source/knob synchronization, gesture undo, active split/document routing,
+        keyboard focus and global shortcuts. Inspect probe lifecycle and display
+        smoothing without confusing displayed silence with actual audio output.
+        Retain accessible labels and global text scaling. Do not introduce hidden
+        synthesis state disconnected from source.
+    - path: "test/**"
+      instructions: >-
+        Prefer behavioral regressions over implementation snapshots. Tests must
+        own isolated workspaces and never modify installed apps or user files.
+        Audio checks should cover meaningful onset/release, finite samples and
+        callback boundaries; GUI tests must account for virtualized content.
+        Do not weaken assertions or silently skip failing coverage to pass CI.
+    - path: ".github/**"
+      instructions: >-
+        Check fork PR safety, least-privilege tokens, immutable dependencies,
+        shell interpolation, timeouts, failure propagation and artifact provenance.
+        A skipped or cancelled required job must not make the CI gate pass.
+        Release publishing must be manual, use tested tag artifacts and keep
+        repository write access separate from building contributor code.
+  finishing_touches:
+    simplify:
+      enabled: false
+    autofix:
+      enabled: false
+    fix_ci:
+      enabled: false
+    resolve_merge_conflict:
+      enabled: false
+    docstrings:
+      enabled: false
+    unit_tests:
+      enabled: false
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+chat:
+  art: false
+  auto_reply: true
+knowledge_base:
+  automatic_linking_mode: disabled
+  linked_repositories: []

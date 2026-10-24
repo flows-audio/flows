@@ -39,6 +39,13 @@ Never commit credentials, personal workspaces, build output or test recordings.
 Contribute only code and assets you have the right to share under the applicable
 project license. Third-party code needs its original license and attribution.
 
+## Pull request checks
+
+All PRs run the [CI checks](.github/CI.md). Wait for the **CI** check and the
+latest CodeRabbit review, address actionable findings, and include relevant
+local validation in the PR description. Native UI and listening checks remain
+local responsibilities; a green hosted build does not replace them.
+
 ## Platform contributions
 
 The desktop app currently targets macOS. Windows/Linux work should keep the

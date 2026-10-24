@@ -77,8 +77,8 @@ or notarize. Source should be available at the matching public tag.
 
 Maintainers can run **Publish macOS preview** in GitHub Actions for an existing
 release tag. It builds and tests on a fresh macOS runner, checks dependency
-notices, packages the binaries and source, then uploads checksums and publishes
-the release. Only that manually started job receives repository write access;
+notices, packages the binaries and source, then stores the package and checksums as an Actions artifact. Enable the
+`publish` input to publish the release. Only the separate publishing job receives repository write access;
 ordinary CI checks remain read-only.
 
 The deployment target is macOS 11, not a claim of runtime testing on every

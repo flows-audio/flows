@@ -8,6 +8,10 @@ on:
         required: true
         default: v1.1.4
         type: string
+      publish:
+        description: Publish the verified package as a GitHub release (otherwise artifacts only)
+        type: boolean
+        default: false
 
 concurrency:
   group: release-${{ inputs.tag }}
@@ -17,10 +21,11 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  build:
     runs-on: macos-26
-    permissions:
-      contents: write
+    timeout-minutes: 45
+    outputs:
+      tested_commit: ${{ steps.release_tag.outputs.commit }}
     env:
       FLOWS_RELEASE_TAG: ${{ inputs.tag }}
     steps:
@@ -34,10 +39,18 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: ui/package-lock.json
-      - name: Verify release tag
-        run: test "$FLOWS_RELEASE_TAG" = "v$(cat VERSION)"
+      - name: Verify exact release tag
+        id: release_tag
+        shell: bash
+        run: |
+          test "$FLOWS_RELEASE_TAG" = "v$(cat VERSION)"
+          git show-ref --verify "refs/tags/$FLOWS_RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$FLOWS_RELEASE_TAG^{commit}")"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Fetch pinned JUCE
-        run: git clone --branch 8.0.7 --depth 1 https://github.com/juce-framework/JUCE.git ../JUCE
+        run: |
+          git clone --branch 8.0.7 --depth 1 https://github.com/juce-framework/JUCE.git ../JUCE
+          test "$(git -C ../JUCE rev-parse HEAD)" = "10a589619b452c261b2940767eb253171eb5a823"
       - run: npm ci --prefix ui
       - run: npm audit --prefix ui --audit-level=high
       - name: Verify dependency notices
@@ -47,7 +60,7 @@ jobs:
       - run: cmake --preset app -DJUCE_DIR="$PWD/../JUCE" -DCMAKE_OSX_ARCHITECTURES=arm64
       - run: cmake --build --preset app --parallel 2
       - name: Test release build
-        run: ctest --preset app -E 'window_startup|editor_layout'
+        run: ctest --preset app -E 'window_startup|editor_layout' --output-junit results.xml
       - name: Package app, plugins and corresponding source
         run: python3 tools/package_macos.py --juce-dir ../JUCE --tag "$FLOWS_RELEASE_TAG"
       - name: Prepare source attachments and checksums
@@ -67,17 +80,70 @@ jobs:
               hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n'
               for p in assets))
           PY
+      - name: Preserve release test diagnostics
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-diagnostics
+          path: |
+            build-app/results.xml
+            build-app/Testing/Temporary/*.log
+          retention-days: 14
+          if-no-files-found: ignore
+      - name: Store tested package and release notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: macos-preview
+          path: |
+            dist/*.zip
+            dist/*.tar.gz
+            dist/SHA256SUMS.txt
+            .github/RELEASE_NOTES.md
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    if: ${{ inputs.publish }}
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      FLOWS_RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Download artifacts from this successful build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: macos-preview
+      - name: Verify package checksums
+        working-directory: dist
+        run: sha256sum --check SHA256SUMS.txt
       - name: Upload verified artifacts and publish
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          TESTED_COMMIT: ${{ needs.build.outputs.tested_commit }}
         run: |
+          verify_remote_tag() {
+            remote_commit=$(git ls-remote "https://github.com/$GH_REPO.git" \
+              "refs/tags/$FLOWS_RELEASE_TAG" "refs/tags/$FLOWS_RELEASE_TAG^{}" |
+              awk '$2 ~ /\^\{\}$/ { peeled=$1; next } { direct=$1 } END { print peeled ? peeled : direct }')
+            test -n "$TESTED_COMMIT"
+            if [[ "$remote_commit" != "$TESTED_COMMIT" ]]; then
+              echo "Release tag no longer matches the tested commit." >&2
+              exit 1
+            fi
+          }
+          verify_remote_tag
           if ! gh release view "$FLOWS_RELEASE_TAG" >/dev/null 2>&1; then
             gh release create "$FLOWS_RELEASE_TAG" --verify-tag --draft \
-              --title "Flows $(cat VERSION) — macOS preview" \
+              --title "Flows ${FLOWS_RELEASE_TAG#v} — macOS preview" \
               --notes-file .github/RELEASE_NOTES.md
           fi
           gh release upload "$FLOWS_RELEASE_TAG" dist/*.zip dist/*.tar.gz dist/SHA256SUMS.txt --clobber
+          verify_remote_tag
           gh release edit "$FLOWS_RELEASE_TAG" --draft=false --latest \
-            --title "Flows $(cat VERSION) — macOS preview" \
+            --title "Flows ${FLOWS_RELEASE_TAG#v} — macOS preview" \
             --notes-file .github/RELEASE_NOTES.md
