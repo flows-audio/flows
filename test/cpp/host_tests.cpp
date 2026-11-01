@@ -445,11 +445,34 @@ void document_tests(FlowsProcessor& p){
     p.request("document.save",object({}));auto saved=File(SystemStats::getEnvironmentVariable("FLOWS_WORKSPACE",{})).getChildFile(str(document(p),"path"));check(saved.loadFileAsString()==code,"Save did not persist actual source.");
 }
 void midi_tests(FlowsProcessor& p){
+    apply(p,code);ready(p);
     p.request("keyboard.panic",object({}));audio(p);
     MidiBuffer on;on.addEvent(MidiMessage::noteOn(1,60,.5f),0);on.addEvent(MidiMessage::noteOn(1,60,.5f),16);audio(p,on);
     check(static_cast<int>(get(get(p.snapshot(),"audio"),"voices"))==2,"Same-pitch MIDI presses must retain two identities.");
     MidiBuffer off;off.addEvent(MidiMessage::noteOff(1,60),0);check(audio(p,off)>0,"Releasing one same-pitch note silenced both voices.");check(static_cast<int>(get(get(p.snapshot(),"audio"),"voices"))==1,"First note-off must release exactly one identity.");
     audio(p,off);check(static_cast<int>(get(get(p.snapshot(),"audio"),"voices"))==0,"Second note-off must release the remaining identity.");audio(p); /* Drain the 3 ms playback tail. */ for(int i=0;i<16;++i)check(audio(p)<1e-7,"Gated sine remained audible after matching note-offs.");
+    auto voices=[&]{return static_cast<int>(get(get(p.snapshot(),"audio"),"voices"));};
+    MidiBuffer channels;channels.addEvent(MidiMessage::noteOn(1,60,.5f),0);channels.addEvent(MidiMessage::noteOn(2,60,.5f),16);audio(p,channels);
+    audio(p,off);check(voices()==1,"A note-off released another MIDI channel's note");
+    MidiBuffer zero;zero.addEvent(MidiMessage::noteOn(2,60,static_cast<uint8>(0)),0);audio(p,zero);
+    check(voices()==0,"Velocity-zero note-on must release its note");
+    MidiBuffer wheels;wheels.addEvent(MidiMessage::pitchWheel(1,12000),0);wheels.addEvent(MidiMessage::controllerEvent(1,1,127),0);
+    audio(p,wheels);check(voices()==0,"Unsupported MIDI controls must not start voices");
+    auto peakAt=[&](float velocity){
+        p.request("keyboard.panic",object({}));audio(p);
+        MidiBuffer note;note.addEvent(MidiMessage::noteOn(1,69,velocity),0);
+        double peak=audio(p,note);for(int i=0;i<8;++i)peak=std::max(peak,audio(p));
+        p.releaseMidiNotes();audio(p);return peak;
+    };
+    const auto soft=peakAt(.25f),hard=peakAt(.75f);
+    check(soft>0 && hard>soft*2.8 && hard<soft*3.2,"MIDI velocity must reach key.velocity");
+    for(int i=0;i<8;++i)audio(p);
+    p.request("keyboard.noteOn",object({{"noteId",9001},{"pitch",67},{"velocity",.6}}));audio(p);
+    audio(p,channels);check(voices()==3,"Expected independent UI and MIDI voices");
+    p.releaseMidiNotes();audio(p);check(voices()==1,"Disconnect must release MIDI notes without silencing UI keys");
+    p.request("keyboard.noteOff",object({{"noteId",9001}}));audio(p);check(voices()==0,"UI release after MIDI disconnect failed");
+    // A collected note-on racing with disconnect must not leave a stuck voice.
+    p.releaseMidiNotes();audio(p,channels);check(voices()==0,"Queued MIDI note-on survived device disconnect");
 }
 void stopped_audio_macro_mapping_tests(FlowsProcessor& p){
     apply(p,code);ready(p);
@@ -894,4 +917,4 @@ void ai_tests(FlowsProcessor& p,const String& endpoint){
 
 }
 }
-int main(int argc,char** argv){try{String endpoint;for(int i=1;i<argc;++i)if(String(argv[i])=="--endpoint"&&i+1<argc)endpoint=argv[++i];check(endpoint.isNotEmpty(),"Usage: HostTests --endpoint http://127.0.0.1:PORT/v1");check(SystemStats::getEnvironmentVariable("FLOWS_WORKSPACE",{}).isNotEmpty(),"FLOWS_WORKSPACE must point at an isolated test directory.");setenv("FLOWS_AI_CONFIG_DIR",File(SystemStats::getEnvironmentVariable("FLOWS_WORKSPACE",{})).getChildFile("test-global-ai").getFullPathName().toRawUTF8(),1);ScopedJuceInitialiser_GUI initialise;json_budget_tests();endpoint_tests();global_model_tests();{FlowsProcessor processor(false, memorySecrets());processor.prepareToPlay(48000,128);document_tests(processor);graph_tests(processor);choice_tests(processor);probe_tests(processor);stereo_host_tests(processor);preference_tests(processor);midi_tests(processor);stopped_audio_macro_mapping_tests(processor);current_source_audio_tests(processor);developer_host_tests(processor);package_tests(processor);multi_document_tests(processor);ai_tests(processor,endpoint);processor.releaseResources();}standalone_transport_tests();bundled_example_migration_tests();workspace_recovery_tests();std::cout<<"Host integration passed: discrete choices/UTF-16 edits/undo/dependencies, probe aliases/control voice/root budgets, safe example migration, current unsaved-source audio and invalid-source muting, source conflicts, UTF-16 bindings, gestures, stopped-device macro maps, structural unbinding, portable recall, MIDI identities, independent document drafts/undo/save/close, focus/audio isolation, workspace recovery, AI real render/proposal/stale/cancel.\n";return 0;}catch(const std::exception& exception){std::cerr<<"Host integration failure: "<<exception.what()<<'\n';return 1;}}
+int main(int argc,char** argv){try{setenv("FLOWS_DISABLE_LIVE_BRIDGE","1",1);String endpoint;for(int i=1;i<argc;++i)if(String(argv[i])=="--endpoint"&&i+1<argc)endpoint=argv[++i];check(endpoint.isNotEmpty(),"Usage: HostTests --endpoint http://127.0.0.1:PORT/v1");check(SystemStats::getEnvironmentVariable("FLOWS_WORKSPACE",{}).isNotEmpty(),"FLOWS_WORKSPACE must point at an isolated test directory.");setenv("FLOWS_AI_CONFIG_DIR",File(SystemStats::getEnvironmentVariable("FLOWS_WORKSPACE",{})).getChildFile("test-global-ai").getFullPathName().toRawUTF8(),1);ScopedJuceInitialiser_GUI initialise;json_budget_tests();endpoint_tests();global_model_tests();{FlowsProcessor processor(false, memorySecrets());processor.prepareToPlay(48000,128);document_tests(processor);graph_tests(processor);choice_tests(processor);probe_tests(processor);stereo_host_tests(processor);preference_tests(processor);midi_tests(processor);stopped_audio_macro_mapping_tests(processor);current_source_audio_tests(processor);developer_host_tests(processor);package_tests(processor);multi_document_tests(processor);ai_tests(processor,endpoint);processor.releaseResources();}standalone_transport_tests();bundled_example_migration_tests();workspace_recovery_tests();std::cout<<"Host integration passed: discrete choices/UTF-16 edits/undo/dependencies, probe aliases/control voice/root budgets, safe example migration, current unsaved-source audio and invalid-source muting, source conflicts, UTF-16 bindings, gestures, stopped-device macro maps, structural unbinding, portable recall, MIDI identities, independent document drafts/undo/save/close, focus/audio isolation, workspace recovery, AI real render/proposal/stale/cancel.\n";return 0;}catch(const std::exception& exception){std::cerr<<"Host integration failure: "<<exception.what()<<'\n';return 1;}}

@@ -44,6 +44,20 @@ Tab/Enter accepts, and Escape closes. Valid unsaved source drives the sound.
 Save writes the source to disk. Compile or missing-sample errors mute the
 affected instrument until repaired.
 
+**MIDI keyboards:** connect a keyboard before or after opening the app. New
+inputs are enabled automatically, and a port that fails to open is tried again
+on the next device change. Use the sample-rate button in the top bar to open
+**Audio & MIDI** and enable or disable inputs. A disabled input stays off
+until you enable it again, including after it is unplugged and replugged.
+Note-on, note-off and velocity work on all MIDI channels, in both Edit and
+Perform modes; use `key.velocity` in the instrument to make touch affect its
+sound. Unplugging or disabling any input note-offs every MIDI-held note, so
+other connected keyboards are released too. On-screen keys and the step
+sequencer keep playing. The release is a normal note-off, so the tail follows
+the instrument's response to `key.gate`. Pitch/modulation wheels, aftertouch
+and sustain pedals are not mapped yet. For AU/VST3, route MIDI to Flows
+through your DAW instead.
+
 **AI is optional.** Synthesis, editing and probes work without an account or
 API key. To use the assistant, configure your own OpenAI-compatible endpoint
 and model in its global settings. Keys use macOS Keychain. Source proposals
@@ -86,6 +100,9 @@ instruments and comparisons.
   mute, swing, scales and a metronome.
 - Portable `.flowsinst` instruments, source undo, workspace recovery and
   an optional assistant with compile/render/compare tools.
+- A local Live bridge for reading unsaved instrument source, previewing a
+  proposal, and applying or restoring it with revision checks. The bridge is a
+  private directory of JSON files. It does not talk to Ableton Live's API.
 
 ## Built with
 

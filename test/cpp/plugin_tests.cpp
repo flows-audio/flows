@@ -16,6 +16,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <cstring>
 #include <iostream>
@@ -347,7 +348,7 @@ void au_tests(const std::string& path){
     std::cout<<"AU bundle passed: host PPQ/transport LFO, distinct stereo channels, A4 sine, MIDI offsets/polyphony, scheduled offsets/ramps across blocks, automated/invalid-draft state recall.\n";
 }
 }
-int main(int argc,char** argv){try{
+int main(int argc,char** argv){try{setenv("FLOWS_DISABLE_LIVE_BRIDGE","1",1);
     std::string vstPath,auPath;for(int i=1;i<argc;++i){std::string arg=argv[i];if(arg=="--vst3"&&i+1<argc)vstPath=argv[++i];else if(arg=="--au"&&i+1<argc)auPath=argv[++i];}
     check(!vstPath.empty()||!auPath.empty(),"Usage: PluginTests --vst3 bundle --au bundle");juce::ScopedJuceInitialiser_GUI init;
     auto directory=juce::File("/private/tmp").getNonexistentChildFile("flows-wrapper-tests",{},false);check(directory.createDirectory().wasOk(),"Cannot create isolated wrapper workspace");setenv("FLOWS_AI_CONFIG_DIR",directory.getChildFile("test-global-ai").getFullPathName().toRawUTF8(),1);setenv("FLOWS_WORKSPACE",directory.getFullPathName().toRawUTF8(),1);

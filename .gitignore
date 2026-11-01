@@ -25,3 +25,6 @@ ui/dist/
 .recovery/
 .sequencers/
 .local/
+
+# Optional local producer-vault link; never publish personal notes.
+/producer
