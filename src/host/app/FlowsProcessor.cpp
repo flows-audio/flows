@@ -173,8 +173,13 @@ FlowsProcessor::FlowsProcessor(bool isStandalone, AISecrets secrets)
     configureWorkspace();
     updateCheckpointLocked();
     worker_ = std::jthread([this](std::stop_token stop) { worker(stop); });
+    companionId_=juce::Uuid().toString();
+    if(juce::SystemStats::getEnvironmentVariable("FLOWS_DISABLE_LIVE_BRIDGE",{})!="1")
+        companionWorker_=std::jthread([this](std::stop_token stop){companionLoop(stop);});
 }
 FlowsProcessor::~FlowsProcessor() {
+    companionWorker_.request_stop();
+    if(companionWorker_.joinable())companionWorker_.join();
     aiGeneration_.fetch_add(1); aiWorker_.request_stop(); worker_.request_stop();
     if (aiWorker_.joinable()) aiWorker_.join();
     if (worker_.joinable()) worker_.join();
@@ -326,6 +331,19 @@ void FlowsProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBu
         }
     }
     midi.clear();
+    // Release after this block's MIDI, including a note-on already in the
+    // block. The collector reset drops anything not yet copied here. The
+    // note-off is stamped on the last sample and stays after that note-on
+    // because the block sort is stable. UI keys and the sequencer are not in
+    // midiHeld_. A full event buffer sets panic_ and the later panic path
+    // resets the instrument, including those other notes.
+    if (midiRelease_.exchange(false)) {
+        for (auto& held : midiHeld_) if (held.used) {
+            append({clock + static_cast<std::uint64_t>(total - 1), EventType::note_off,
+                    held.id, static_cast<double>(held.pitch), 0});
+            held.used = false;
+        }
+    }
     if(resetSequence||pinned!=sequenceAudioPinned_){
         // Release only the old scheduler's identities in the cursor instrument;
         // switching to a pinned source must preserve held keyboard notes.

@@ -11,6 +11,7 @@
 #include "engine/boundary_smoother.hpp"
 #include <juce_audio_utils/juce_audio_utils.h>
 #include <condition_variable>
+#include <functional>
 #include <thread>
 #include <mutex>
 
@@ -40,6 +41,7 @@ public:
 
     juce::var request(const juce::String& method, const juce::var& params);
     juce::var snapshot();
+    juce::var companionRequest(const juce::String&, const juce::var&, const std::function<bool()>& cancelled = {});
     juce::var importSample(const juce::File& file);
     juce::var telemetry();
     std::vector<juce::var> takeAgentEvents();
@@ -47,6 +49,7 @@ public:
     const bool standalone;
     std::atomic<bool> windowTransparency{false};
     void beginHostAutomation() noexcept;
+    void releaseMidiNotes() noexcept { midiRelease_.store(true); }
     void hostParameter(int slot, int offset, float value) noexcept;
     void auParameter(int slot, int offset, unsigned int duration, float start, float end, bool ramp) noexcept;
 private:
@@ -124,6 +127,7 @@ private:
     std::atomic<bool> hostTempo_{false};
     std::atomic<int> blockSize_{256};
     std::atomic<bool> running_{false}, panic_{false}, demo_{false};
+    std::atomic<bool> midiRelease_{false};
     std::atomic<std::uint64_t> hostOverflows_{0};
     SequencePattern sequencePattern_ = rollingBassPattern(), pinnedSequencePattern_ = rollingBassPattern();
     SequenceSound documentSequenceSound_, sequenceSound_;
@@ -168,7 +172,11 @@ private:
     std::shared_ptr<const Checkpoint> checkpoint_;
     juce::String checkpointError_;
     std::shared_ptr<const juce::MemoryBlock> restore_;
-    std::jthread worker_, aiWorker_;
+    std::jthread worker_, aiWorker_, companionWorker_;
+    juce::String companionId_;
+    struct CompanionProposal { juce::String source, before, documentId; std::uint64_t baseRevision=0, appliedRevision=0; bool applied=false, restored=false; };
+    std::map<juce::String,CompanionProposal> companionProposals_;
+    void companionLoop(std::stop_token);
     AIModels aiModels_;
     juce::var aiProfiles_;
     juce::String aiSelectedId_, aiSettingsError_;
@@ -210,7 +218,7 @@ private:
     juce::var conversationViewLocked();
     juce::var readAIInstrumentLocked(const juce::String& path);
     bool proposalCurrentLocked(const Proposal&);
-    juce::var runAITool(const juce::String&, const juce::var&, const juce::String& source);
+    juce::var runAITool(const juce::String&, const juce::var&, const juce::String& source, const std::function<bool()>& externalCancel = {});
 };
 void beginHostAutomation(juce::AudioProcessor*) noexcept;
 void captureHostParameter(juce::AudioProcessor*, int, int, float) noexcept;

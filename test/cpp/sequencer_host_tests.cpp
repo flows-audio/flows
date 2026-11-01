@@ -607,6 +607,7 @@ void workspaceImportTests() {
 
 int main() {
     try {
+        setenv("FLOWS_DISABLE_LIVE_BRIDGE","1",1);
         TestWorkspace workspace;
         ScopedJuceInitialiser_GUI initialise;
         {

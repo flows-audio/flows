@@ -1,4 +1,5 @@
 #include "FlowsProcessor.hpp"
+#include "StandaloneMidi.hpp"
 #include <juce_gui_extra/juce_gui_extra.h>
 
 namespace flows::app {
@@ -7,6 +8,7 @@ public:
     FlowsProcessor processor{true};
     juce::AudioDeviceManager devices;
     juce::AudioProcessorPlayer player;
+    std::unique_ptr<StandaloneMidi> midiInputs;
     // Establish the peer's alpha mode before attaching the native WebView.
     // Changing Component::setOpaque afterwards recreates the macOS window.
     MainWindow() : DocumentWindow(FLOWS_STANDALONE_NAME,juce::Colours::transparentBlack,allButtons) {
@@ -16,8 +18,13 @@ public:
         setContentOwned(processor.createEditor(),true); centreWithSize(1440,920); setVisible(true);
         auto deviceError = devices.initialise(0,2,nullptr,true);
         player.setProcessor(&processor); devices.addAudioCallback(&player);
-        for (const auto& input : juce::MidiInput::getAvailableDevices()) devices.setMidiInputDeviceEnabled(input.identifier,true);
-        devices.addMidiInputDeviceCallback({},&player);
+        midiInputs = std::make_unique<StandaloneMidi>(devices, player, [this] {
+            // Reset drops MIDI not yet copied into this callback. processBlock
+            // only releases notes already sounding or already in this block.
+            // The collector is shared, so one lost port discards every keyboard's queue.
+            player.getMidiMessageCollector().reset(juce::jmax(1.0, processor.getSampleRate()));
+            processor.releaseMidiNotes();
+        });
         processor.showAudioSettings = [this] {
             auto* content = new juce::AudioDeviceSelectorComponent(devices,0,0,1,2,true,false,true,false);
             content->setSize(580,480); juce::DialogWindow::LaunchOptions options;
@@ -28,7 +35,7 @@ public:
         if (deviceError.isNotEmpty()) juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,"Audio device",deviceError);
     }
     ~MainWindow() override {
-        processor.showAudioSettings = {}; devices.removeMidiInputDeviceCallback({},&player);
+        processor.showAudioSettings = {}; midiInputs.reset();
         devices.removeAudioCallback(&player); player.setProcessor(nullptr); clearContentComponent();
     }
     void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }

@@ -270,10 +270,17 @@ bool FlowsProcessor::proposalCurrentLocked(const Proposal& proposal) {
     catch(...) {return false;}
 }
 
-var FlowsProcessor::runAITool(const String& name,const var& args,const String& source) {
+var FlowsProcessor::runAITool(const String& name,const var& args,const String& source,const std::function<bool()>& externalCancel) {
     try {
         if(!args.isObject())error("Tool arguments must be an object.");
-        const auto generation=aiGeneration_.load();auto cancelled=[&]{return aiGeneration_.load()!=generation||aiWorker_.get_stop_token().stop_requested();};
+        const auto generation=aiGeneration_.load();
+        // The companion passes its own stop callback. It must not read aiWorker_:
+        // the message thread replaces that jthread, and its stop token stays
+        // requested after the assistant is cancelled.
+        auto cancelled=[&]{
+            if(externalCancel)return externalCancel();
+            return aiGeneration_.load()!=generation||aiWorker_.get_stop_token().stop_requested();
+        };
         if(name=="search_instruments") {
             const auto query=str(args,"query");const int offset=static_cast<int>(number(args,"offset",0,0,100000));
             Array<var> matches;Array<var> files;
@@ -313,6 +320,19 @@ var FlowsProcessor::runAITool(const String& name,const var& args,const String& s
             while(!pending.empty()){auto id=pending.back();pending.pop_back();if(visited.contains(id))continue;if(visited.size()==128){truncated=true;break;}visited.insert(id);for(auto input:program.nodes[id].inputs)pending.push_back(input);}
             Array<var> nodes;for(auto id:visited){const auto& node=program.nodes[id];Array<var> inputs;for(auto input:node.inputs)inputs.add(static_cast<int>(input));nodes.add(object({{"id",static_cast<int>(id)},{"op",String(op_name(node.op).data())},{"unit",String(unit_name(node.unit).data())},{"rate",String(rate_name(node.rate).data())},{"channels",static_cast<int>(node.channels)},{"inputs",inputs},{"line",static_cast<int64>(node.span.line)},{"initialValue",node.op==Op::parameter?var(node.initial_value):var()}}));}
             return object({{"status","explained"},{"signal",target},{"nodes",nodes},{"truncated",truncated},{"sourceDigest",digest(text)}});
+        }
+        // Companion-only. Not listed in toolDefinitions(). metrics describe the
+        // unscaled render; the WAV may be quieter by previewGain.
+        if(name=="render_preview") {
+            auto request=renderRequest(args);auto output=render(text,request,{},cancelled,workspace_.getFullPathName().toStdString());
+            AudioBuffer<float> buffer(2,static_cast<int>(request.frames));
+            for(std::size_t i=0;i<request.frames;++i){buffer.setSample(0,static_cast<int>(i),output.channels==2?output.left[i]:output.output[i]);buffer.setSample(1,static_cast<int>(i),output.channels==2?output.right[i]:output.output[i]);}
+            auto measured=metrics(stereoInterleaved(output));
+            if(measured.peak>0.89)buffer.applyGain(static_cast<float>(0.89/measured.peak));
+            MemoryBlock bytes;WavAudioFormat format;
+            {std::unique_ptr<AudioFormatWriter> writer(format.createWriterFor(new MemoryOutputStream(bytes,false),renderRate,2,24,{},0));
+             if(!writer||!writer->writeFromAudioSampleBuffer(buffer,0,buffer.getNumSamples()))error("Preview encoding failed");}
+            return object({{"status","rendered"},{"metrics",metricJSON(measured)},{"wav",Base64::toBase64(bytes.getData(),bytes.getSize())},{"previewGain",measured.peak>0.89?0.89/measured.peak:1.0},{"audioListened",false}});
         }
         if(name=="render_case"){
             auto request=renderRequest(args);std::vector<String> signals;auto list=get(args,"signals");if(!list.isVoid()){auto* names=list.getArray();if(!names||names->size()>8)error("signals must contain at most eight names.");for(const auto& item:*names){if(!item.isString())error("Observed signal names must be strings.");signals.push_back(item.toString());}}

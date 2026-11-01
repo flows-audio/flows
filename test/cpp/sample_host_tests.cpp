@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <cstdlib>
 #include <iostream>
 #include <thread>
 
@@ -131,6 +132,7 @@ void literals_and_containment() {
 }
 }
 int main() {
+    setenv("FLOWS_DISABLE_LIVE_BRIDGE","1",1);
     ScopedJuceInitialiser_GUI gui;
     try { assets_and_native(); portability(); recovery(); literals_and_containment(); std::cout<<"Native sample import, playback, catalogue, package/DAW portability, collision handling and containment passed.\n"; }
     catch(const std::exception& error) { std::cerr<<error.what()<<'\n'; return 1; }

@@ -97,7 +97,7 @@ if(FLOWS_BUILD_APP)
         IS_MIDI_EFFECT FALSE EDITOR_WANTS_KEYBOARD_FOCUS TRUE
         COPY_PLUGIN_AFTER_BUILD FALSE AU_MAIN_TYPE kAudioUnitType_MusicDevice
         VST3_CATEGORIES Instrument Synth)
-    target_sources(FlowsPlugin PRIVATE src/host/app/SampleAssets.cpp src/host/app/AssistantHistory.cpp src/host/app/FlowsProcessor.cpp src/host/app/FlowsEditor.cpp src/host/app/AIService.cpp src/host/app/AIModels.cpp src/host/app/AISecrets.mm src/host/app/MacAppearance.mm)
+    target_sources(FlowsPlugin PRIVATE src/host/app/SampleAssets.cpp src/host/app/AssistantHistory.cpp src/host/app/FlowsProcessor.cpp src/host/app/LiveCompanion.cpp src/host/app/FlowsEditor.cpp src/host/app/AIService.cpp src/host/app/AIModels.cpp src/host/app/AISecrets.mm src/host/app/MacAppearance.mm)
     target_link_libraries(FlowsPlugin PRIVATE flows_session FlowsAssets "-framework Security"
         juce::juce_audio_utils juce::juce_gui_extra juce::juce_dsp juce::juce_cryptography
         PUBLIC juce::juce_recommended_config_flags)
@@ -133,6 +133,14 @@ if(FLOWS_BUILD_APP)
         target_link_libraries(AssistantHistoryTests PRIVATE juce::juce_core)
         target_compile_definitions(AssistantHistoryTests PRIVATE JUCE_USE_CURL=0)
         add_test(NAME assistant_history COMMAND AssistantHistoryTests)
+        juce_add_console_app(LiveCompanionTests PRODUCT_NAME "Flows Live Companion Tests")
+        target_sources(LiveCompanionTests PRIVATE test/cpp/live_companion_tests.cpp)
+        target_link_libraries(LiveCompanionTests PRIVATE FlowsPlugin)
+        add_test(NAME live_companion COMMAND LiveCompanionTests)
+        juce_add_console_app(MidiInputTests PRODUCT_NAME "Flows MIDI Input Tests")
+        target_sources(MidiInputTests PRIVATE test/cpp/midi_input_tests.cpp)
+        target_link_libraries(MidiInputTests PRIVATE FlowsPlugin)
+        add_test(NAME midi_input COMMAND MidiInputTests)
         juce_add_console_app(HostTests PRODUCT_NAME "Flows Host Tests")
         target_sources(HostTests PRIVATE test/cpp/host_tests.cpp)
         target_link_libraries(HostTests PRIVATE FlowsPlugin)

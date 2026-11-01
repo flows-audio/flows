@@ -97,6 +97,10 @@ public:
             setenv("FLOWS_AI_CONFIG_DIR", workspace_.getChildFile("test-global-ai").getFullPathName().toRawUTF8(), 1);
             check(setenv("FLOWS_WORKSPACE", workspace_.getFullPathName().toRawUTF8(), 1) == 0,
                   "Could not configure isolated test workspace.");
+            // Keep the bridge running; this test is the real app. Point it at the
+            // workspace so it does not publish into the user's LiveBridge folder.
+            check(setenv("FLOWS_LIVE_SYNTH_DIR", workspace_.getChildFile(".live-bridge").getFullPathName().toRawUTF8(), 1) == 0,
+                  "Could not isolate the Live bridge.");
             const auto historyMessage=object({{"id","markdown-window-turn"},{"prompt","Explain this signal flow"},
                 {"text","## Signal flow\n\n**One oscillator** with `key.pitch`.\n\n- Play a note\n- Inspect the signal\n\n| Signal | Role |\n| --- | --- |\n| raw | Audio |\n\n```flows\nraw = osc(pitch: key.pitch, level: -6db)\n```\n\n<script>window.__unsafeMarkdown=true</script>"},
                 {"status","done"},{"documentId","examples/trance-rolling-bass.flows"},{"baseRevision",1}});
