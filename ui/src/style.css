@@ -137,8 +137,8 @@
 
 /* Browser host: startup screens, first-visit notice and in-app device settings. */
 :root[data-host=web] body{background:rgb(var(--bg-rgb))}
-.boot-screen{height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:rgb(var(--bg-rgb));color:var(--text)}
-.boot-panel{width:min(460px,100%);display:flex;flex-direction:column;align-items:flex-start;gap:14px}
+.boot-screen{height:100%;display:flex;overflow:auto;padding:24px 16px;background:rgb(var(--bg-rgb));color:var(--text)}
+.boot-panel{margin:auto;width:min(460px,100%);display:flex;flex-direction:column;align-items:flex-start;gap:14px}
 .boot-icon{border-radius:13px;box-shadow:0 12px 32px #0006;margin-bottom:6px}
 .boot-panel h1{font-size:1.75rem;font-weight:500;letter-spacing:-.025em;line-height:1.3;margin:0;text-wrap:balance}
 .boot-panel p{font-size:1.083333rem;line-height:1.7;color:var(--muted);margin:0;max-width:62ch}

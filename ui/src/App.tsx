@@ -11,7 +11,7 @@ import { hostAvailable, request, subscribe, transportKind } from './client';
 import { AudioSettings } from './AudioSettings';
 import { ExternalLink } from './ExternalLink';
 import { editorShortcut, shortcutLabel, textSizeShortcut } from './keymap';
-import { audioAccept, bytesToBase64, download, importableAudio, pickFile } from './web/files';
+import { audioAccept, bytesToBase64, download, pickFile, readImportableAudio } from './web/files';
 import { WebNotices } from './web/WebNotices';
 import { publishTelemetry, resetTelemetry, selectObservationVoice, selectObservationProjection } from './telemetry';
 import { Parameter, Snapshot, Telemetry } from './types';
@@ -231,7 +231,7 @@ export function App() {
     if (!browserFiles) { void perform('sample.import'); return; }
     void pickFile(audioAccept).then(async file => {
       if (!file) return;
-      const audio = await importableAudio(file.name, new Uint8Array(await file.arrayBuffer()));
+      const audio = await readImportableAudio(file);
       await perform('workspace.import', { folder: 'Samples', name: audio.name, data: bytesToBase64(audio.bytes) });
     }).catch(notifyError);
   }, [browserFiles, perform, notifyError]);

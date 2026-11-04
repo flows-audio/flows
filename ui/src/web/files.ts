@@ -48,6 +48,18 @@ export function encodeWav(channels: Float32Array[], sampleRate: number): Uint8Ar
   return new Uint8Array(buffer);
 }
 
+// The core accepts imports up to this size (workspace.import in src/app/AppCore.cpp).
+export const importLimitBytes = 64 * 1024 * 1024;
+const megabytes = (bytes: number) => `${Math.ceil(bytes / (1024 * 1024))} MB`;
+
+/** Reads a picked audio file for import, refusing files over the import
+ * limit before reading them and decoded audio over it before encoding. */
+export async function readImportableAudio(file: File): Promise<{ name: string; bytes: Uint8Array }> {
+  if (file.size > importLimitBytes)
+    throw new Error(`${file.name} is ${megabytes(file.size)}. Samples up to ${megabytes(importLimitBytes)} can be imported.`);
+  return importableAudio(file.name, new Uint8Array(await file.arrayBuffer()));
+}
+
 /** Converts compressed audio to WAV for import; WAV/AIFF pass through untouched. */
 export async function importableAudio(name: string, bytes: Uint8Array): Promise<{ name: string; bytes: Uint8Array }> {
   if (coreAudio.test(name) || !browserAudio.test(name)) return { name, bytes };
@@ -59,5 +71,8 @@ export async function importableAudio(name: string, bytes: Uint8Array): Promise<
   try { decoded = await context.decodeAudioData(bytes.slice().buffer); }
   catch { throw new Error(`The browser could not decode ${name}.`); }
   const channels = Array.from({ length: Math.min(2, decoded.numberOfChannels) }, (_, c) => decoded.getChannelData(c));
+  const size = 44 + decoded.length * channels.length * 4;
+  if (size > importLimitBytes)
+    throw new Error(`${name} decodes to ${megabytes(size)} of audio. Samples up to ${megabytes(importLimitBytes)} can be imported; trim it or import a shorter file.`);
   return { name: name.replace(/\.[^.]+$/, '') + '.wav', bytes: encodeWav(channels, decoded.sampleRate) };
 }

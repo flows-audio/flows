@@ -10,10 +10,11 @@ export function editorShortcut(event: KeyLike, { mac, web }: { mac: boolean; web
   if (web) {
     // Option/Alt: no browser binds these, and event.code ignores the
     // characters macOS produces for Option combinations.
-    if (!event.altKey || event.metaKey || event.ctrlKey) return undefined;
-    if (!event.shiftKey && event.code === 'KeyW') return 'close';
-    if (!event.shiftKey && event.code === 'Digit1') return 'focus-first';
-    if (!event.shiftKey && event.code === 'Digit2') return 'focus-second';
+    // Shift is left alone: Option+Shift types characters such as ’ and ”.
+    if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return undefined;
+    if (event.code === 'KeyW') return 'close';
+    if (event.code === 'Digit1') return 'focus-first';
+    if (event.code === 'Digit2') return 'focus-second';
     if (event.code === 'BracketRight' || event.key === 'PageDown') return 'next-tab';
     if (event.code === 'BracketLeft' || event.key === 'PageUp') return 'previous-tab';
     return undefined;

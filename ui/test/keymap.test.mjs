@@ -26,6 +26,10 @@ assert.equal(editorShortcut(key('Digit2', { altKey: true, key: '™' }), macWeb)
 assert.equal(editorShortcut(key('BracketRight', { altKey: true, key: '‘' }), macWeb), 'next-tab');
 assert.equal(editorShortcut(key('BracketLeft', { altKey: true }), pcWeb), 'previous-tab');
 assert.equal(editorShortcut(key('KeyW', { altKey: true, metaKey: true }), macWeb), undefined);
+// Option+Shift still types characters (’ and ” on a US Mac layout).
+assert.equal(editorShortcut(key('BracketRight', { altKey: true, shiftKey: true, key: '’' }), macWeb), undefined);
+assert.equal(editorShortcut(key('BracketLeft', { altKey: true, shiftKey: true, key: '”' }), macWeb), undefined);
+assert.equal(editorShortcut(key('PageDown', { altKey: true, shiftKey: true, key: 'PageDown' }), pcWeb), undefined);
 
 // Split is the same everywhere.
 assert.equal(editorShortcut(key('Backslash', { metaKey: true }), macWeb), 'split');
