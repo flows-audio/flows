@@ -198,6 +198,21 @@ if(BUILD_TESTING)
     target_link_libraries(compiler_tests PRIVATE flows_core)
     add_test(NAME compiler COMMAND compiler_tests)
 
+    # The scripted protocol session; the web build runs the same script under
+    # Node and CI compares both outputs (protocol/test/protocol.test.mjs).
+    add_executable(conformance_runner test/cpp/conformance_runner.cpp)
+    target_link_libraries(conformance_runner PRIVATE flows_app)
+    add_test(NAME protocol_coverage COMMAND conformance_runner --repo "${CMAKE_CURRENT_SOURCE_DIR}" --coverage)
+    add_test(NAME protocol_session COMMAND conformance_runner --repo "${CMAKE_CURRENT_SOURCE_DIR}"
+        --out "${CMAKE_BINARY_DIR}/conformance/native.json")
+    set_tests_properties(protocol_session PROPERTIES FIXTURES_SETUP protocol_native TIMEOUT 120)
+    find_program(FLOWS_NODE node)
+    if(FLOWS_NODE)
+        add_test(NAME protocol_contract COMMAND ${FLOWS_NODE} "${CMAKE_CURRENT_SOURCE_DIR}/protocol/test/protocol.test.mjs"
+            "${CMAKE_BINARY_DIR}/conformance/native.json")
+        set_tests_properties(protocol_contract PROPERTIES FIXTURES_REQUIRED protocol_native)
+    endif()
+
     add_executable(assistant_history_tests test/cpp/assistant_history_tests.cpp)
     target_link_libraries(assistant_history_tests PRIVATE flows_app)
     add_test(NAME assistant_history COMMAND assistant_history_tests)
