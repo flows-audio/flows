@@ -70,7 +70,7 @@ Resizable dividers, visibility controls, keyboard shortcuts, theme colors, font 
 
 ## The workspace is ordinary files plus recovery state
 
-[`configureWorkspace`](../../src/app/AppCore.cpp#L279) chooses `FLOWS_WORKSPACE` if set; otherwise it uses JUCE's user application-data directory plus `Flows/Workspace` (normally `~/Library/Flows/Workspace` on macOS). The application recursively discovers `.flows` files. The demonstration library is a hierarchy of these ordinary source files, not a separate preset format or runtime module database.
+[`configureWorkspace`](../../src/app/AppCore.cpp#L279) uses the folder its host passes in. The macOS app passes `FLOWS_WORKSPACE` if set, otherwise JUCE's user application-data directory plus `Flows/Workspace` (normally `~/Library/Flows/Workspace`). The browser build passes a folder in Emscripten's file system that is saved to the browser's IndexedDB for this site, or kept in memory for the tab when the browser blocks storage; there is no folder on disk to open. The application recursively discovers `.flows` files. The demonstration library is a hierarchy of these ordinary source files, not a separate preset format or runtime module database.
 
 | File/state | Purpose |
 | --- | --- |
@@ -111,7 +111,7 @@ A follow-up uses up to 16 recent successful turns within a 64 KiB context budget
 | `compare_observations` | Renders matching event timelines and compares signals or source variants |
 | `propose_source_patch` | Compiles a complete replacement source and returns a proposal |
 
-Sending a prompt does not require an open instrument. The model can search names or source text, then read the identified files. Hidden files and paths outside the workspace are excluded. Source and tool results are treated as data. [`AIModels`](../../src/app/AIModels.cpp) saves multiple global profiles under `~/Library/Flows`; [`AISecrets.mm`](../../src/host/app/AISecrets.mm) stores their keys in macOS Keychain. The bottom selector chooses a saved profile across conversations. Keys never enter source packages or model context.
+Sending a prompt does not require an open instrument. The model can search names or source text, then read the identified files. Hidden files and paths outside the workspace are excluded. Source and tool results are treated as data. [`AIModels`](../../src/app/AIModels.cpp) saves multiple global profiles in the host's settings folder (`~/Library/Flows` in the macOS app); [`AISecrets.mm`](../../src/host/app/AISecrets.mm) stores their keys in macOS Keychain. The browser build keeps keys in memory only: closing or reloading the tab forgets them, and they must be entered again. The bottom selector chooses a saved profile across conversations. Keys never enter source packages or model context.
 
 The [network loop](../../src/app/AIService.cpp#L762) allows at most six model/tool rounds and twelve tool calls, with request/response limits, timeout, and cancellation. Endpoints must use HTTPS or strict loopback HTTP. Networking happens on the AI worker, never the audio callback.
 

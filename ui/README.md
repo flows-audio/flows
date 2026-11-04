@@ -10,6 +10,7 @@ npm ci
 npm run build        # the editor embedded in the macOS app
 npm run build:web    # the browser site (needs the WebAssembly core; see docs/WEB.md)
 npm run dev:web      # browser editor with hot reload against build-web/web
+npx playwright install chromium firefox webkit   # once, before the browser tests
 npm run test:web     # Playwright: Chromium, Firefox and WebKit
 ```
 

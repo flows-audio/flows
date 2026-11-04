@@ -10,7 +10,7 @@ package version must match it.
 | --- | --- |
 | Compiler/DSP/CLI | C++20, CMake 3.25+, Ninja, Python 3.9+ for tests |
 | macOS app/AU/VST3 | Above plus Xcode 26+ command-line tools, Node.js 22+, JUCE 8.0.7 |
-| Browser build | Above (no JUCE) plus Emscripten 6.0.13 and Node.js 22+ |
+| Browser build | The compiler/DSP requirements (any OS; no Xcode or JUCE) plus Emscripten 6.0.13 and Node.js 22+ |
 | Frontend | `npm ci --prefix ui`, using the checked-in lockfile |
 
 JUCE is fetched separately under its own license. The build verifies the

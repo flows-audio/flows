@@ -83,11 +83,15 @@ users the corresponding source: the editor links to the matching tag
 | Feature | Chrome / Edge | Firefox | Safari |
 | --- | --- | --- | --- |
 | Editor, compile, Signal Flow, probes | ✓ | ✓ | ✓ |
-| Audio (Wasm Audio Worklet) | ✓ | ✓ | ✓ |
+| Audio (Wasm Audio Worklet) | ✓ | ✓ | expected; not yet verified in Safari |
 | MIDI keyboards (Web MIDI) | ✓ | ✓ | — use on-screen or computer keys |
 | Workspace in browser storage | ✓ | ✓ | ✓ |
 
-Continuous integration runs the browser tests in Chromium, Firefox and WebKit.
+Continuous integration runs the browser tests in Chromium, Firefox and WebKit
+with a virtual audio output; Chromium and Firefox must play a note through the
+audio worklet. WebKit there is Playwright's Linux build of Safari's engine, not
+Safari itself, and its audio check may skip, so audio in Safari still needs
+checking on a Mac.
 
 **Starting sound.** Browsers only start audio after a user gesture. The first
 key press or click anywhere starts it; until then the instrument still compiles
