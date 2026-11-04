@@ -35,11 +35,14 @@ assert.equal(assembleState({ protocol: 99, full: true, slices: snapshot(3) }), n
 // Legacy full snapshots still work.
 assert.equal(assembleState(snapshot(4)).document.revision, 4);
 
-// Request results become the base that later slices merge onto.
+// Slices are relative to the previous event, so a request result never
+// becomes their base: merging onto it could keep fields the event omitted.
 const listeners = new Map();
+const calls = [];
 setTransport({
   kind: 'web',
   call: async (method, params, timeout) => {
+    calls.push(method);
     assert.equal(timeout, method.startsWith('ai.') ? 180000 : 30000);
     return method === 'session.get' ? snapshot(5) : { ok: true, params };
   },
@@ -47,12 +50,26 @@ setTransport({
 });
 assert.equal(hostAvailable(), true);
 await request('session.get');
+calls.length = 0;
 const received = [];
 const stop = subscribe('flowsState', value => received.push(value));
+// Without earlier events the slice is dropped and the client asks the host
+// to restart its events in full (session.get), once while that is pending.
 listeners.get('flowsState')({ protocol: 1, full: false, slices: { audio: { running: true } } });
-assert.equal(received.length, 1);
-assert.equal(received[0].document.revision, 5);
-assert.equal(received[0].audio.running, true);
+listeners.get('flowsState')({ protocol: 1, full: false, slices: { audio: { running: false } } });
+assert.equal(received.length, 0);
+assert.deepEqual(calls, ['session.get']);
+await new Promise(resolve => setTimeout(resolve, 0));
+listeners.get('flowsState')({ protocol: 1, full: true, slices: snapshot(6, { audio: { running: false } }) });
+listeners.get('flowsState')({ protocol: 1, full: false, slices: { audio: { running: true } } });
+assert.equal(received.length, 2);
+assert.equal(received[1].document.revision, 6);
+assert.equal(received[1].audio.running, true);
+// A later request result does not replace the event state.
+await request('session.get');
+listeners.get('flowsState')({ protocol: 1, full: false, slices: { compile: { status: 'working' } } });
+assert.equal(received[2].document.revision, 6);
+assert.equal(received[2].compile.status, 'working');
 stop();
 assert.equal(listeners.has('flowsState'), false);
-console.log('Client: slices assemble onto full snapshots, protocol versions are checked and transports are swappable.');
+console.log('Client: slices assemble onto event state only, a missing base restarts events in full, protocol versions are checked and transports are swappable.');

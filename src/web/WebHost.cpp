@@ -223,6 +223,8 @@ EMSCRIPTEN_KEEPALIVE int flows_start(const char* workspace, const char* settings
 }
 // Returns {"ok":true,"result":...} or {"ok":false,"error":"..."}. Free with flows_free.
 EMSCRIPTEN_KEEPALIVE char* flows_request(const char* method, const char* params) {
+    // The page may have missed earlier state events; restart them in full.
+    if (std::strcmp(method, "session.get") == 0) host->stream.reset();
     try {
         auto result = host->core->request(method, json::parseBounded(params, 128u * 1024 * 1024));
         return copy(reply(true, result));

@@ -19,7 +19,10 @@ const noTransport: Transport = {
 
 let transport: Transport = juceTransport() ?? noTransport;
 let capabilities: Capabilities | undefined;
+// The state assembled from flowsState events. Slices are relative to the
+// previous event, so request results never replace it.
 let base: Record<string, unknown> | null = null;
+let resyncing = false;
 const capabilityListeners = new Set<(value: Capabilities | undefined) => void>();
 const stateListeners = new Set<(value: Snapshot) => void>();
 let stopState: (() => void) | undefined;
@@ -27,7 +30,7 @@ let stopState: (() => void) | undefined;
 /** Installs the browser host before the UI renders. */
 export function setTransport(next: Transport) {
   stopState?.(); stopState = undefined;
-  transport = next; base = null; capabilities = undefined;
+  transport = next; base = null; capabilities = undefined; resyncing = false;
   if (stateListeners.size) listenForState();
 }
 export function hostAvailable() { return transport.kind !== 'none'; }
@@ -40,8 +43,7 @@ export function onCapabilities(listener: (value: Capabilities | undefined) => vo
 function isSnapshot(value: unknown): value is Snapshot & Record<string, unknown> {
   return !!value && typeof value === 'object' && 'sessionId' in value && 'document' in value;
 }
-function observe(snapshot: Snapshot & Record<string, unknown>) {
-  base = { ...snapshot };
+function noteCapabilities(snapshot: Snapshot & Record<string, unknown>) {
   const next = snapshot.capabilities;
   if (next && JSON.stringify(next) !== JSON.stringify(capabilities)) {
     capabilities = next;
@@ -49,8 +51,8 @@ function observe(snapshot: Snapshot & Record<string, unknown>) {
   }
 }
 
-/** Merges a flowsState payload into the latest full snapshot. A slice event
- * that arrives before any full snapshot is dropped; the UI asks for one. */
+/** Merges a flowsState payload onto the state from earlier events. A slice
+ * event without that state is dropped; the listener then asks for a full one. */
 export function assembleState(payload: unknown): Snapshot | null {
   if (payload && typeof payload === 'object' && 'slices' in payload) {
     const event = payload as { protocol?: number; full?: boolean; slices?: Record<string, unknown> };
@@ -61,19 +63,33 @@ export function assembleState(payload: unknown): Snapshot | null {
       if (value === null) delete next[key]; else next[key] = value;
     }
     if (!isSnapshot(next)) return null;
-    observe(next);
+    base = next;
+    noteCapabilities(next);
     return next;
   }
   if (!isSnapshot(payload)) return null;
-  observe(payload);
+  base = { ...payload };
+  noteCapabilities(payload);
   return payload;
+}
+/** True for a slice event this client could read but has no state to merge onto. */
+function missingBase(payload: unknown) {
+  const event = payload as { protocol?: number; full?: boolean; slices?: unknown } | null;
+  return !base && !!event && typeof event === 'object' && 'slices' in event && !event.full &&
+    (event.protocol === undefined || event.protocol <= PROTOCOL_VERSION);
+}
+/** session.get makes the host's next flowsState event a full snapshot. */
+function resync() {
+  if (resyncing) return;
+  resyncing = true;
+  void transport.call('session.get', {}, METHOD_TIMEOUTS['session.get']).catch(() => {}).finally(() => { resyncing = false; });
 }
 
 export function request<M extends MethodName>(method: M, params?: Methods[M]['params']): Promise<Methods[M]['result']>;
 export function request<T = any>(method: string, params?: Record<string, unknown>): Promise<T>;
 export async function request(method: string, params: Record<string, unknown> = {}) {
   const result = await transport.call(method, params, METHOD_TIMEOUTS[method as MethodName] ?? 30000);
-  if (isSnapshot(result)) observe(result);
+  if (isSnapshot(result)) noteCapabilities(result);
   return result;
 }
 
@@ -81,6 +97,7 @@ function listenForState() {
   stopState = transport.listen('flowsState', payload => {
     const snapshot = assembleState(payload);
     if (snapshot) stateListeners.forEach(listener => listener(snapshot));
+    else if (missingBase(payload)) resync();
   });
 }
 export function subscribe(event: 'flowsState', callback: (value: Snapshot) => void): () => void;

@@ -7,13 +7,13 @@
     "web": "Implemented only by the browser host."
   },
   "events": {
-    "flowsState": { "summary": "Changed top-level snapshot slices, about five times a second.", "payload": { "$ref": "#/$defs/StateEvent" } },
+    "flowsState": { "summary": "Changed top-level snapshot slices, about five times a second, relative to the previous event (never to request results). The first event, and the first after session.get, is full.", "payload": { "$ref": "#/$defs/StateEvent" } },
     "flowsTelemetry": { "summary": "Latest analysis and meters, up to 30 times a second.", "payload": { "$ref": "#/$defs/Telemetry" } },
     "flowsAgent": { "summary": "Assistant progress and completion.", "payload": { "$ref": "#/$defs/AgentEvent" } },
     "flowsDevices": { "summary": "Browser audio output and Web MIDI changes (web host only).", "payload": { "$ref": "#/$defs/AudioDevices" } }
   },
   "methods": {
-    "session.get": { "owner": "core", "summary": "Full snapshot.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "session.get": { "owner": "core", "summary": "Full snapshot. The host's next flowsState event is also a full snapshot, so a client can restart its state from events.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
     "document.new": {
       "owner": "core", "summary": "Create an instrument from the starter template or an imported sample, and open it.",
       "params": { "type": "object", "properties": { "name": { "type": "string" }, "folder": { "type": "string" }, "samplePath": { "type": "string" }, "documentId": { "type": "string" } } },

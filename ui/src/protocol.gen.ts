@@ -477,7 +477,7 @@ export interface AudioDevices {
 }
 
 export interface Methods {
-  /** Full snapshot. (core) */
+  /** Full snapshot. The host's next flowsState event is also a full snapshot, so a client can restart its state from events. (core) */
   'session.get': { params: NoParams; result: Snapshot };
   /** Create an instrument from the starter template or an imported sample, and open it. (core) */
   'document.new': { params: {
@@ -795,7 +795,7 @@ export const METHOD_TIMEOUTS: Record<MethodName, number> = {
 };
 
 export interface Events {
-  /** Changed top-level snapshot slices, about five times a second. */
+  /** Changed top-level snapshot slices, about five times a second, relative to the previous event (never to request results). The first event, and the first after session.get, is full. */
   flowsState: StateEvent;
   /** Latest analysis and meters, up to 30 times a second. */
   flowsTelemetry: Telemetry;

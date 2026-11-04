@@ -164,6 +164,8 @@ void FlowsEditor::handle(const juce::Array<juce::var>& args, Browser::NativeFunc
             });
         return;
     }
+    // The page may have missed earlier state events; restart them in full.
+    if (method == "session.get") stream_.reset();
     try {
         complete(respond(id, processor_.requestValue(method.toStdString(), fromJuce(params))));
     } catch (const std::exception& e) {
