@@ -148,13 +148,16 @@ jobs:
         run: |
           python3 tools/collect_licenses.py --emscripten-dir "$EMSCRIPTEN_ROOT"
           git diff --exit-code
+      - name: Install test browsers
+        working-directory: ui
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Virtual audio output for the browser tests
+        run: bash .github/scripts/virtual-audio.sh
       - name: Browser tests
         working-directory: ui
         env:
           CI: "true"
-        run: |
-          npx playwright install --with-deps chromium firefox webkit
-          npm run test:web
+        run: npm run test:web
       - name: Package the static site with license and source notices
         run: |
           python3 tools/package_web.py --tag "$FLOWS_RELEASE_TAG"

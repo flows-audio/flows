@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import math
 import struct
 import subprocess
 import sys
@@ -82,6 +83,12 @@ def compare(case_id: str, native: Path, wasm: Path) -> str:
                 if x != y:
                     raise AssertionError(f"{case_id}: capture value {x!r} != {y!r}")
                 continue
+            if fx == fy or (math.isnan(fx) and math.isnan(fy)):
+                continue
+            # NaN or infinity on one side only is a divergence; an infinite
+            # value would otherwise make the relative tolerance infinite.
+            if not (math.isfinite(fx) and math.isfinite(fy)):
+                raise AssertionError(f"{case_id}: capture {fx} vs {fy}")
             difference = abs(fx - fy)
             if difference > CAPTURE_ABSOLUTE + CAPTURE_RELATIVE * max(abs(fx), abs(fy)):
                 raise AssertionError(f"{case_id}: capture {fx} vs {fy}")

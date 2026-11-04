@@ -184,6 +184,8 @@ jobs:
       - name: Install test browsers
         working-directory: ui
         run: npx playwright install --with-deps chromium firefox webkit
+      - name: Virtual audio output for the browser tests
+        run: bash .github/scripts/virtual-audio.sh
       - name: Chromium, Firefox and WebKit
         working-directory: ui
         env:

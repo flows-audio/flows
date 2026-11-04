@@ -58,7 +58,11 @@ test('plays a note through the audio worklet', async ({ page, browserName }) => 
     const value = window.__flows.devices().audio.state;
     return ['running', 'failed', 'unsupported'].includes(value) ? value : null;
   }, null, { timeout: 15_000 }).then(handle => handle.jsonValue()).catch(() => 'suspended');
-  test.skip(state !== 'running', `${browserName} did not start audio in this environment (${state})`);
+  // CI gives the browsers a virtual output device (.github/scripts/virtual-audio.sh),
+  // so Chromium and Firefox must play there. WebKit's Linux build and machines
+  // without an output device may not start audio; those runs skip.
+  if (process.env.CI && browserName !== 'webkit') expect(state, `${browserName} audio state`).toBe('running');
+  else test.skip(state !== 'running', `${browserName} did not start audio in this environment (${state})`);
   const snapshot = await call(page, 'session.get');
   await expect.poll(async () => (await call(page, 'session.get')).audio.running).toBe(true);
   await call(page, 'keyboard.noteOn', { noteId: 1, pitch: 60, velocity: 0.9, documentId: snapshot.document.id });
