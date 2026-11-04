@@ -1,0 +1,16 @@
+# Cloudflare Pages and Netlify read this file. Flows' audio engine shares
+# memory with its audio thread, which browsers allow only on cross-origin
+# isolated pages. Other hosts must send the same two isolation headers.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-origin
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: midi=(self), microphone=(), camera=(), geolocation=()
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/core/*
+  Cache-Control: public, max-age=300, must-revalidate

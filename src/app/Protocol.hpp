@@ -21,10 +21,9 @@ json::Value protocolCapabilities(json::Value hostCapabilities);
 class StateStream {
 public:
     // Returns {"protocol":N,"full":bool,"slices":{...}} or nullopt if nothing changed.
+    // Deltas are relative to the previous event, not to request results: the
+    // UI does not feed every result into its state, so events carry every change.
     std::optional<json::Value> next(const json::Value& snapshot);
-    // Records a snapshot the UI received another way (a request result), so
-    // later deltas are computed against what the UI actually holds.
-    void observe(const json::Value& snapshot);
     void reset() { previous_.clear(); }
 
 private:

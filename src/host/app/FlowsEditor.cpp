@@ -54,15 +54,14 @@ void FlowsEditor::timerCallback() {
     if (!isShowing()) return;
     if (processor_.standalone && !processor_.windowTransparency.load())
         processor_.windowTransparency.store(prepareTransparentWindow(*this));
-    browser_->emitEventIfBrowserIsVisible("flowsTelemetry", processor_.telemetry());
+    if (const auto telemetry = processor_.telemetry(); telemetry.isObject())
+        browser_->emitEventIfBrowserIsVisible("flowsTelemetry", telemetry);
     for (const auto& event : processor_.takeAgentEvents()) browser_->emitEventIfBrowserIsVisible("flowsAgent", event);
     if ((timerCount_++ % 6) == 0)
         if (const auto delta = stream_.next(processor_.snapshotValue()))
             browser_->emitEventIfBrowserIsVisible("flowsState", toJuce(*delta));
 }
 juce::var FlowsEditor::respond(const juce::var& id, const json::Value& result) {
-    // Request results that are snapshots update what the page holds.
-    if (result.has("sessionId")) stream_.observe(result);
     return object({{"id", id}, {"ok", true}, {"result", toJuce(result)}});
 }
 void FlowsEditor::handle(const juce::Array<juce::var>& args, Browser::NativeFunctionCompletion complete) {

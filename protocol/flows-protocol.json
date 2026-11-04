@@ -9,7 +9,8 @@
   "events": {
     "flowsState": { "summary": "Changed top-level snapshot slices, about five times a second.", "payload": { "$ref": "#/$defs/StateEvent" } },
     "flowsTelemetry": { "summary": "Latest analysis and meters, up to 30 times a second.", "payload": { "$ref": "#/$defs/Telemetry" } },
-    "flowsAgent": { "summary": "Assistant progress and completion.", "payload": { "$ref": "#/$defs/AgentEvent" } }
+    "flowsAgent": { "summary": "Assistant progress and completion.", "payload": { "$ref": "#/$defs/AgentEvent" } },
+    "flowsDevices": { "summary": "Browser audio output and Web MIDI changes (web host only).", "payload": { "$ref": "#/$defs/AudioDevices" } }
   },
   "methods": {
     "session.get": { "owner": "core", "summary": "Full snapshot.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },

@@ -801,5 +801,7 @@ export interface Events {
   flowsTelemetry: Telemetry;
   /** Assistant progress and completion. */
   flowsAgent: AgentEvent;
+  /** Browser audio output and Web MIDI changes (web host only). */
+  flowsDevices: AudioDevices;
 }
 export type EventName = keyof Events;

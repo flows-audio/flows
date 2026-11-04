@@ -30,12 +30,6 @@ json::Value protocolCapabilities(json::Value host) {
     return host;
 }
 
-void StateStream::observe(const json::Value& snapshot) {
-    const auto* object = snapshot.getObject();
-    if (!object || previous_.empty()) return;
-    for (const auto& [key, value] : *object)
-        if (const auto found = previous_.find(key); found != previous_.end()) found->second = json::stringify(value);
-}
 std::optional<json::Value> StateStream::next(const json::Value& snapshot) {
     const auto* object = snapshot.getObject();
     if (!object) return std::nullopt;

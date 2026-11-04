@@ -11,6 +11,9 @@ __pycache__/
 test/output/
 ui/node_modules/
 ui/dist/
+ui/dist-web/
+ui/test-results/
+ui/playwright-report/
 
 # Local application/plugin release packages.
 /dist/

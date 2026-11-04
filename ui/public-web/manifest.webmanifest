@@ -1,0 +1,11 @@
+{
+  "name": "Flows",
+  "short_name": "Flows",
+  "description": "Build a sound in code. Listen, observe and compare at every step.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#121716",
+  "theme_color": "#121716",
+  "icons": [{ "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

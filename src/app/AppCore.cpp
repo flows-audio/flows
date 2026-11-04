@@ -218,6 +218,13 @@ AppCore::AppCore(CoreOptions options)
       runtime_(parameters_),
       aiModels_(options_.settingsDirectory, options_.secrets) {
     capabilities_ = protocolCapabilities(options_.capabilities);
+    // Hosts may poll telemetry before the worker's first analysis frame.
+    latestTelemetry_ = json::object({{"sequence", 0},
+                                     {"programRevision", 0},
+                                     {"signals", json::Value::array()},
+                                     {"gap", true},
+                                     {"analysisReady", false},
+                                     {"status", "waiting for selected instrument"}});
     configureWorkspace();
     updateCheckpointLocked();
     worker_ = std::jthread([this](std::stop_token stop) { worker(stop); });
@@ -380,7 +387,8 @@ void AppCore::resetActiveAudioLocked() {
     auditionSignal_.clear();
     runtime_.sequenceAuditionMuted.store(false);
     ++selectionVersion_;
-    latestTelemetry_ = json::object({{"programRevision", 0},
+    latestTelemetry_ = json::object({{"sequence", 0},
+                                     {"programRevision", 0},
                                      {"signals", json::Value::array()},
                                      {"gap", true},
                                      {"analysisReady", false},

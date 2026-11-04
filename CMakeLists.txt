@@ -14,6 +14,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 include(CTest)
 
+# The browser build shares one memory between the page, pthreads (compile,
+# analysis, assistant) and the audio worklet, so every object needs threads.
+# Wasm exceptions keep C++ error handling identical to the native build.
+if(EMSCRIPTEN)
+    add_compile_options(-pthread -fwasm-exceptions -msimd128)
+    add_link_options(-pthread -fwasm-exceptions)
+endif()
+
 add_library(flows_core
     src/compiler/program.cpp
     src/engine/engine.cpp
@@ -98,6 +106,8 @@ if(FLOWS_BUILD_APP)
         add_test(NAME flow_layout_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/flowLayout.test.mjs)
         add_test(NAME markdown_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/markdown.test.mjs)
         add_test(NAME assistant_history_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/assistantHistory.test.mjs)
+        add_test(NAME keymap_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/keymap.test.mjs)
+        add_test(NAME client_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/client.test.mjs)
     endif()
     # The editor is whatever Vite builds: every file in ui/dist is embedded for
     # the WebView, so code-split chunks, workers and icons need no C++ change.
@@ -191,7 +201,78 @@ if(FLOWS_BUILD_APP)
     endif()
 endif()
 
-if(BUILD_TESTING)
+if(EMSCRIPTEN)
+    # The browser module: the portable core plus its web host (src/web).
+    add_executable(flows_web src/web/WebHost.cpp)
+    target_link_libraries(flows_web PRIVATE flows_app)
+    set_target_properties(flows_web PROPERTIES OUTPUT_NAME flows-core SUFFIX ".mjs"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/web")
+    target_link_options(flows_web PRIVATE
+        --no-entry -sMODULARIZE=1 -sEXPORT_ES6=1 -sEXPORT_NAME=createFlowsCore
+        -sENVIRONMENT=web,worker -sAUDIO_WORKLET=1 -sWASM_WORKERS=1 -sPTHREAD_POOL_SIZE=4
+        -sALLOW_MEMORY_GROWTH=1 -sGROWABLE_ARRAYBUFFERS=1 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=2GB
+        -sSTACK_SIZE=1MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB
+        -sFORCE_FILESYSTEM=1 -lidbfs.js
+        "-sEXPORTED_FUNCTIONS=_malloc,_free"
+        "-sEXPORTED_RUNTIME_METHODS=FS,IDBFS,UTF8ToString,stringToNewUTF8,HEAPU8,emscriptenRegisterAudioObject,emscriptenGetAudioObject"
+        "--embed-file=${CMAKE_CURRENT_SOURCE_DIR}/test/presets@/bundle/presets"
+        "--embed-file=${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/samples/flows-kick.wav@/bundle/samples/flows-kick.wav"
+        "--embed-file=${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/samples/flows-stereo.wav@/bundle/samples/flows-stereo.wav")
+    set_property(TARGET flows_web APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test/presets")
+
+    # Command-line programs and tests run under Node with the real file system.
+    function(flows_node_program target)
+        target_link_options(${target} PRIVATE -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1
+            -sALLOW_MEMORY_GROWTH=1 -sINITIAL_MEMORY=128MB -sMAXIMUM_MEMORY=2GB -sPTHREAD_POOL_SIZE=8
+            -sSTACK_SIZE=1MB -sDEFAULT_PTHREAD_STACK_SIZE=2MB)
+    endfunction()
+    flows_node_program(flows)
+endif()
+
+if(BUILD_TESTING AND EMSCRIPTEN)
+    # The same portable suites the native build runs, executed as WebAssembly.
+    foreach(test_name IN ITEMS compiler engine sequencer sample_compiler sample_engine sample_file developer assistant_history)
+        add_executable(${test_name}_tests test/cpp/${test_name}_tests.cpp)
+        if(test_name STREQUAL "developer")
+            target_link_libraries(${test_name}_tests PRIVATE flows_session)
+        elseif(test_name STREQUAL "assistant_history")
+            target_link_libraries(${test_name}_tests PRIVATE flows_app)
+        else()
+            target_link_libraries(${test_name}_tests PRIVATE flows_core)
+        endif()
+        flows_node_program(${test_name}_tests)
+        add_test(NAME ${test_name} COMMAND ${test_name}_tests)
+    endforeach()
+    foreach(test_name IN ITEMS analyzer session sample_session sample_replay)
+        add_executable(${test_name}_tests test/cpp/${test_name}_tests.cpp)
+        target_link_libraries(${test_name}_tests PRIVATE flows_session)
+        flows_node_program(${test_name}_tests)
+        add_test(NAME ${test_name} COMMAND ${test_name}_tests)
+    endforeach()
+    add_executable(conformance_runner test/cpp/conformance_runner.cpp)
+    target_link_libraries(conformance_runner PRIVATE flows_app)
+    flows_node_program(conformance_runner)
+    add_test(NAME protocol_coverage COMMAND conformance_runner --repo "${CMAKE_CURRENT_SOURCE_DIR}" --coverage)
+    add_test(NAME protocol_session COMMAND conformance_runner --repo "${CMAKE_CURRENT_SOURCE_DIR}"
+        --out "${CMAKE_BINARY_DIR}/conformance/wasm.json")
+    set_tests_properties(protocol_session PROPERTIES TIMEOUT 300 FIXTURES_SETUP protocol_wasm)
+    # Cross-build parity: pass the native outputs of the same source tree.
+    set(FLOWS_NATIVE_CLI "" CACHE FILEPATH "Native flows CLI, to compare WebAssembly renders against")
+    set(FLOWS_NATIVE_CONFORMANCE "" CACHE FILEPATH "Native conformance output (build/conformance/native.json)")
+    if(FLOWS_NATIVE_CLI)
+        find_package(Python3 REQUIRED COMPONENTS Interpreter)
+        add_test(NAME render_parity COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/test/tools/render_parity.py"
+            --native "${FLOWS_NATIVE_CLI}" --wasm $<TARGET_FILE:flows> --node "${CMAKE_CROSSCOMPILING_EMULATOR}")
+        set_tests_properties(render_parity PROPERTIES TIMEOUT 600)
+    endif()
+    if(FLOWS_NATIVE_CONFORMANCE)
+        add_test(NAME protocol_parity COMMAND "${CMAKE_CROSSCOMPILING_EMULATOR}" "${CMAKE_CURRENT_SOURCE_DIR}/protocol/test/protocol.test.mjs"
+            "${FLOWS_NATIVE_CONFORMANCE}" "${CMAKE_BINARY_DIR}/conformance/wasm.json")
+        set_tests_properties(protocol_parity PROPERTIES FIXTURES_REQUIRED protocol_wasm)
+    endif()
+endif()
+
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_executable(engine_benchmark test/cpp/engine_benchmark.cpp)
     target_link_libraries(engine_benchmark PRIVATE flows_core)
     add_executable(compiler_tests test/cpp/compiler_tests.cpp)

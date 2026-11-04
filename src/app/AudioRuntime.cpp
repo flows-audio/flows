@@ -32,7 +32,9 @@ public:
     }
 
 private:
+#if defined(__aarch64__) || defined(__SSE__) || defined(__x86_64__)
     std::uint64_t saved_ = 0;
+#endif
 };
 constexpr std::uint64_t noteMaskBit = 1ull << 61;
 }  // namespace
@@ -243,7 +245,7 @@ void AudioRuntime::process(const AudioBlock& block) noexcept {
     std::array<OutputGainGroup, sequencerRows> laneGains;
     for (std::size_t i = 0; i < sequencerRows; ++i) {
         const auto& lane = sequencer_.pattern().rows[i];
-        laneGains[i] = {noteMaskBit | (7ull << 56), noteMaskBit | (i << 56),
+        laneGains[i] = {noteMaskBit | (7ull << 56), noteMaskBit | (static_cast<std::uint64_t>(i) << 56),
                         i >= sequencer_.pattern().rowCount || lane.mute ? 0.f
                                                                         : static_cast<float>(std::pow(10., lane.volume / 20))};
     }
