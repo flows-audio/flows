@@ -44,8 +44,14 @@ export function claimWorkspace(handlers: ClaimHandlers): Promise<WorkspaceClaim>
         channel?.postMessage({ type: 'handoff' });
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), 3000);
-        locks.request(lockName, { signal: controller.signal }, lock => { clearTimeout(timer); return hold(lock); })
-          .catch(error => { if (error?.name === 'AbortError') watch(locks.request(lockName, { steal: true }, hold)); });
+        let granted = false;
+        locks.request(lockName, { signal: controller.signal }, lock => { granted = true; clearTimeout(timer); return hold(lock); })
+          .catch(error => {
+            // Once held, a rejection means a later tab stole the lock: a handoff.
+            if (granted) void end();
+            // Before that, AbortError is the timeout: the owner did not answer.
+            else if (error?.name === 'AbortError') watch(locks.request(lockName, { steal: true }, hold));
+          });
       });
       return undefined;
     }));

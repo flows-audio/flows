@@ -5,7 +5,7 @@ import type { Transport } from '../client';
 import type { AudioDevices } from '../protocol.gen';
 import { WebAudio } from './audio';
 import { installFetch } from './fetch';
-import { audioAccept, browserAudio, bytesToBase64, download, importableAudio, pickFile } from './files';
+import { audioAccept, browserAudio, bytesToBase64, download, importableAudio, pickFile, readImportableAudio } from './files';
 import { WebMidi } from './midi';
 import { takeString, withStrings, type FlowsModule } from './module';
 
@@ -46,7 +46,8 @@ export class WebHost implements Transport {
   stop() {
     this.stopped = true;
     this.timers.splice(0).forEach(clearInterval);
-    void this.audio.suspend().catch(() => {});
+    this.audio.stop();
+    this.midi.stop();
   }
 
   listen(event: string, callback: Listener) {
@@ -71,6 +72,7 @@ export class WebHost implements Transport {
   }
 
   async call(method: string, params: Record<string, unknown>): Promise<unknown> {
+    if (this.stopped) throw new Error('Flows is open in another tab.');
     switch (method) {
       case 'audio.devices': return this.devices();
       case 'audio.start': this.audio.start(); return this.devices();
@@ -105,7 +107,7 @@ export class WebHost implements Transport {
       case 'sample.import': {
         const file = await pickFile(audioAccept);
         if (!file) return this.core('session.get');
-        const audio = await importableAudio(file.name, new Uint8Array(await file.arrayBuffer()));
+        const audio = await readImportableAudio(file);
         const result = this.core('workspace.import', { folder: 'Samples', name: audio.name, data: bytesToBase64(audio.bytes) });
         return { ...result, sampleImportedPath: result.importedPath };
       }

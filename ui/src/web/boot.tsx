@@ -9,7 +9,7 @@ import { BootScreen } from './BootScreen';
 import { WebHost } from './host';
 import { claimWorkspace } from './locks';
 import { withStrings, type FlowsModule } from './module';
-import { flushWorkspace, mountWorkspace, settingsPath, workspacePath } from './storage';
+import { flushWorkspace, mountWorkspace, releaseWorkspace, settingsPath, workspacePath } from './storage';
 
 function unsupportedReason(): string | undefined {
   if (typeof WebAssembly !== 'object') return 'This browser has no WebAssembly.';
@@ -33,21 +33,28 @@ export async function bootWeb(container: HTMLElement) {
 
   let module: FlowsModule | undefined;
   let host: WebHost | undefined;
+  // Another tab can take over while this one is still starting.
+  let lost = false;
   const claim = await claimWorkspace({
     busy: takeOver => show(<BootScreen kind="busy" onTakeOver={() => { show(<BootScreen kind="loading" detail="Waiting for the other tab to save…"/>); takeOver(); }}/>),
     lost: async () => {
+      lost = true;
       host?.stop();
-      if (module) await flushWorkspace(module);
+      if (module) await releaseWorkspace(module);
       show(<BootScreen kind="moved"/>);
     },
   });
+  if (lost) return;
   show(<BootScreen kind="loading"/>);
   try {
     const url = new URL('core/flows-core.mjs', document.baseURI).href;
     const { default: create } = await import(/* @vite-ignore */ url);
+    if (lost) return;
     const core: FlowsModule = await create({ printErr: (text: string) => console.error(text) });
+    if (lost) return;
     module = core;
     const storage = await mountWorkspace(core);
+    if (lost) return;
     const capabilities: Partial<Capabilities> = {
       host: 'web', audioSettings: 'in-app', midiInput: typeof navigator.requestMIDIAccess === 'function' ? 'web' : 'none',
       storage, secrets: 'session', fileDialogs: 'browser', clipboard: navigator.clipboard ? 'browser' : 'none',
@@ -73,6 +80,7 @@ export async function bootWeb(container: HTMLElement) {
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     show(<StrictMode><App/></StrictMode>);
   } catch (error) {
+    if (lost) return;
     show(<BootScreen kind="failed" detail={error instanceof Error ? error.message : String(error)}/>);
   }
 }

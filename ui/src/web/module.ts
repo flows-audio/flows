@@ -1,7 +1,7 @@
 // Types for the Emscripten module built from src/web/WebHost.cpp.
 export interface FlowsModule {
   FS: any;
-  IDBFS: any;
+  IDBFS: { queuePersist: (mount: unknown) => void; onAutoPersistStateChanged?: (active: boolean) => void; [key: string]: unknown };
   HEAPU8: Uint8Array;
   UTF8ToString(pointer: number, maxBytes?: number): string;
   stringToNewUTF8(text: string): number;

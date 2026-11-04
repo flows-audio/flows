@@ -12,6 +12,7 @@ export class WebMidi {
   private access?: MIDIAccess;
   private disabled = new Set<string>();
   private attached = new Map<string, MIDIInput>();
+  private stopped = false;
 
   constructor(private readonly module: FlowsModule, private readonly changed: () => void) {
     this.state = typeof navigator.requestMIDIAccess === 'function' ? 'prompt' : 'unsupported';
@@ -24,7 +25,7 @@ export class WebMidi {
 
   /** Asks for MIDI access. Call from a user gesture the first time. */
   async request() {
-    if (this.state === 'unsupported') return;
+    if (this.stopped || this.state === 'unsupported') return;
     try {
       this.access = await navigator.requestMIDIAccess({ sysex: false });
       this.state = 'granted'; this.error = '';
@@ -49,7 +50,16 @@ export class WebMidi {
     }));
     return { state: this.state, inputs, ...(this.error ? { error: this.error } : {}) };
   }
+  /** Another tab owns the workspace: stop listening and release held notes. */
+  stop() {
+    this.stopped = true;
+    if (this.access) this.access.onstatechange = null;
+    for (const input of this.attached.values()) input.onmidimessage = null;
+    if (this.attached.size) this.module._flows_release_midi();
+    this.attached.clear();
+  }
   private refresh() {
+    if (this.stopped) return;
     let lost = false;
     const present = new Set<string>();
     this.access?.inputs.forEach(input => {
