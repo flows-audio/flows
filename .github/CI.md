@@ -12,6 +12,7 @@ read-only repository tokens and no user credentials or audio hardware.
 | Memory and undefined behavior | Linux Clang AddressSanitizer, leak detection and UndefinedBehaviorSanitizer over the portable suite |
 | Editor and publication checks | Locked frontend install, high-severity dependency audit, TypeScript/build, UI regressions and publication hygiene |
 | macOS app and plugins | arm64 release build with exact JUCE 8.0.7 revision; standalone, AU/VST3 host tests and compiler/editor integration |
+| Browser build (WebAssembly) | Pinned Emscripten 6.0.13; the portable suites as WebAssembly, native/WebAssembly protocol and render parity, browser notices, and Playwright tests of the built site in Chromium, Firefox and WebKit. Stores the deployable site ZIP |
 | CI | Stable aggregate check; fails if any dependency fails, is skipped or is cancelled |
 
 There are no path filters: documentation-only PRs still produce the required
@@ -59,11 +60,14 @@ there is no second maintainer available.
 Dependabot proposes weekly Actions and frontend updates. Compatible npm
 updates are grouped; major updates remain separate. The scheduled dependency
 audit catches newly disclosed high-severity advisories even without new commits.
-JUCE and actionlint are pinned explicitly and reviewed when upgraded.
+JUCE, Emscripten (emsdk tag and commit) and actionlint are pinned explicitly
+and reviewed when upgraded.
 
 **Publish macOS preview** is manual. Select an existing `v<VERSION>` tag;
 the workflow verifies the exact tag, builds, tests, checks notices and packages
-binaries with corresponding source. By default it only retains the package as
+binaries with corresponding source. A parallel job builds and tests the browser
+site from the same tag; publishing requires both and checks they tested the
+same commit. By default it only retains the package as
 an Actions artifact for seven days. Enable `publish` to publish a release.
 Only the separate publishing job has repository write access; it downloads
 that run's tested artifacts and verifies their checksums before uploading.

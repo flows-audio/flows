@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Preserve notices from the installed runtime packages and pinned JUCE checkout."""
+"""Preserve notices from the installed runtime packages, the pinned JUCE checkout and,
+for the browser build, the Emscripten runtime and system libraries compiled into it."""
 import argparse
 import json
 from pathlib import Path
@@ -80,7 +81,42 @@ def collect(juce):
     print(json.dumps({'runtime_packages': count, 'juce_notice_files': len(set(selected))}))
 
 
+EMSCRIPTEN_VERSION = '6.0.13'
+# Libraries linked into flows-core.wasm, and the Emscripten JS runtime itself.
+EMSCRIPTEN_NOTICES = {
+    'emscripten-LICENSE.txt': 'LICENSE',
+    'libcxx-LICENSE.txt': 'system/lib/libcxx/LICENSE.TXT',
+    'libcxxabi-LICENSE.txt': 'system/lib/libcxxabi/LICENSE.TXT',
+    'libunwind-LICENSE.txt': 'system/lib/libunwind/LICENSE.TXT',
+    'compiler-rt-LICENSE.txt': 'system/lib/compiler-rt/LICENSE.TXT',
+    'musl-COPYRIGHT.txt': 'system/lib/libc/musl/COPYRIGHT',
+}
+
+
+def collect_emscripten(emscripten):
+    """Copy notices from an Emscripten checkout (emsdk upstream/emscripten or Homebrew libexec)."""
+    version = (emscripten / 'emscripten-version.txt').read_text().strip().strip('"')
+    if version.split('-')[0] != EMSCRIPTEN_VERSION:
+        raise ValueError(f'Use Emscripten {EMSCRIPTEN_VERSION} (found {version})')
+    destination = ROOT / 'licenses/third-party/emscripten'
+    destination.mkdir(parents=True, exist_ok=True)
+    for name, relative in EMSCRIPTEN_NOTICES.items():
+        # Homebrew keeps the project LICENSE one level above libexec.
+        source = next((base / relative for base in (emscripten, emscripten.parent) if (base / relative).is_file()), None)
+        if source is None:
+            raise ValueError(f'Missing Emscripten notice: {relative}')
+        (destination / name).write_bytes(source.read_bytes())
+    print(json.dumps({'emscripten_notice_files': len(EMSCRIPTEN_NOTICES)}))
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--juce-dir', type=Path, required=True)
-    collect(parser.parse_args().juce_dir.resolve())
+    parser.add_argument('--juce-dir', type=Path)
+    parser.add_argument('--emscripten-dir', type=Path, help='Emscripten root containing system/lib (browser build)')
+    arguments = parser.parse_args()
+    if not arguments.juce_dir and not arguments.emscripten_dir:
+        parser.error('pass --juce-dir, --emscripten-dir or both')
+    if arguments.juce_dir:
+        collect(arguments.juce_dir.resolve())
+    if arguments.emscripten_dir:
+        collect_emscripten(arguments.emscripten_dir.resolve())

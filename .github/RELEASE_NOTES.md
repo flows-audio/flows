@@ -11,6 +11,9 @@ compare each stage through Signal Flow and probes.
   Privacy & Security. AU/VST3 host compatibility remains experimental.
 - AI is optional: configure your own endpoint, model and key to use it.
   No keys or personal workspace are included.
+- **Flows-1.1.4-web.zip** is the browser build as a static site, with licenses
+  and a source link. Host it where you can send the two cross-origin isolation
+  headers in its `_headers` file; see `docs/WEB.md`.
 
 ## Included
 
