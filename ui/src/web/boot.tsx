@@ -67,6 +67,9 @@ export async function bootWeb(container: HTMLElement) {
     } });
     const flush = () => void flushWorkspace(core);
     window.addEventListener('pagehide', () => { flush(); claim.release(); });
+    // A page restored from the back/forward cache no longer holds the
+    // workspace lock; start again so tab ownership is checked.
+    window.addEventListener('pageshow', event => { if (event.persisted) location.reload(); });
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
     show(<StrictMode><App/></StrictMode>);
   } catch (error) {

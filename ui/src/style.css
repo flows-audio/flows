@@ -151,6 +151,8 @@
 @media(prefers-reduced-motion:reduce){.boot-progress::after{animation:none;width:100%;opacity:.45}}
 .web-welcome{display:flex;align-items:center;gap:12px;flex:none;padding:7px 12px 7px 17px;border-bottom:1px solid var(--border);background:var(--panel-raised);color:var(--muted);font-size:1rem;line-height:1.5}
 .web-welcome>svg{flex:none;color:var(--accent)}
+.web-warning{color:var(--text)}
+.web-warning>svg{color:var(--danger)}
 .web-welcome>span{flex:1;min-width:0}
 .web-welcome .secondary-button{flex:none;min-height:28px;padding:5px 10px;gap:7px}
 .audio-settings{width:min(340px,calc(100vw - 32px));max-height:calc(100vh - 64px);overflow:auto;right:16px}

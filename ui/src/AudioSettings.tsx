@@ -14,7 +14,7 @@ function formatBytes(value?: number) {
 }
 type Storage = { persisted: boolean; usage?: number; quota?: number };
 
-export function AudioSettings({ onClose }: { onClose: () => void }) {
+export function AudioSettings({ onClose, storageMode }: { onClose: () => void; storageMode?: string }) {
   const [devices, setDevices] = useState<AudioDevices>();
   const [storage, setStorage] = useState<Storage>();
   const [error, setError] = useState('');
@@ -66,9 +66,11 @@ export function AudioSettings({ onClose }: { onClose: () => void }) {
     </section>
     <section aria-labelledby="storage-heading">
       <h3 id="storage-heading"><Icon name="folder" size={14}/>Storage</h3>
-      <p>Your workspace is saved in this browser on this device{storage?.persisted ? '' : ', and the browser may clear it when space runs low'}. Export instruments to keep copies elsewhere.</p>
-      <div className="device-row">{storage?.usage !== undefined && <small>{formatBytes(storage.usage)} used</small>}
-        {storage && !storage.persisted && <button className="text-button" onClick={keep}>Keep this workspace</button>}</div>
+      {storageMode === 'memory'
+        ? <p>This browser is not letting Flows save, so your work lasts only while this tab is open. Export instruments you want to keep.</p>
+        : <><p>Your workspace is saved in this browser on this device{storage?.persisted ? '' : ', and the browser may clear it when space runs low'}. Export instruments to keep copies elsewhere.</p>
+          <div className="device-row">{storage?.usage !== undefined && <small>{formatBytes(storage.usage)} used</small>}
+            {storage && !storage.persisted && <button className="text-button" onClick={keep}>Keep this workspace</button>}</div></>}
     </section>
   </div>;
 }
