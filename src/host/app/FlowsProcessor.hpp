@@ -1,19 +1,21 @@
 #pragma once
-#include "RealtimeSession.hpp"
-#include "Json.hpp"
-#include "HostAutomation.hpp"
-#include "StepSequencer.hpp"
-#include "SequenceBank.hpp"
-#include "Metronome.hpp"
-#include "SampleAssets.hpp"
-#include "AssistantHistory.hpp"
-#include "AIModels.hpp"
-#include "engine/boundary_smoother.hpp"
 #include <juce_audio_utils/juce_audio_utils.h>
+
 #include <condition_variable>
 #include <functional>
-#include <thread>
 #include <mutex>
+#include <thread>
+
+#include "AIModels.hpp"
+#include "AssistantHistory.hpp"
+#include "HostAutomation.hpp"
+#include "Json.hpp"
+#include "Metronome.hpp"
+#include "RealtimeSession.hpp"
+#include "SampleAssets.hpp"
+#include "SequenceBank.hpp"
+#include "StepSequencer.hpp"
+#include "engine/boundary_smoother.hpp"
 
 namespace flows::app {
 class FlowsProcessor final : public juce::AudioProcessor {
@@ -41,7 +43,8 @@ public:
 
     juce::var request(const juce::String& method, const juce::var& params);
     juce::var snapshot();
-    juce::var companionRequest(const juce::String&, const juce::var&, const std::function<bool()>& cancelled = {});
+    juce::var companionRequest(const juce::String&, const juce::var&,
+                               const std::function<bool()>& cancelled = {});
     juce::var importSample(const juce::File& file);
     juce::var telemetry();
     std::vector<juce::var> takeAgentEvents();
@@ -51,9 +54,13 @@ public:
     void beginHostAutomation() noexcept;
     void releaseMidiNotes() noexcept { midiRelease_.store(true); }
     void hostParameter(int slot, int offset, float value) noexcept;
-    void auParameter(int slot, int offset, unsigned int duration, float start, float end, bool ramp) noexcept;
+    void auParameter(int slot, int offset, unsigned int duration, float start, float end,
+                     bool ramp) noexcept;
+
 private:
-    struct History { juce::String text; };
+    struct History {
+        juce::String text;
+    };
     struct Document {
         juce::String path, text, savedText, gesture, gestureStart;
         std::uint64_t revision = 1, savedRevision = 1;
@@ -68,14 +75,29 @@ private:
         juce::var graph;
         std::optional<Program> program;
     } compiled_;
-    struct Exported { juce::String binding, name; bool bound = false; juce::String structure; };
+    struct Exported {
+        juce::String binding, name;
+        bool bound = false;
+        juce::String structure;
+    };
     std::array<Exported, 32> exports_;
     struct SequenceSound {
         juce::String kind = "active", path, source, playback = "one_shot";
         std::vector<SequenceSound> lanes;
-        void rename(const juce::String& from,const juce::String& to) { if(kind=="instrument"&&path==from)path=to;for(auto& lane:lanes)lane.rename(from,to); }
-        bool references(const juce::String& file) const { if(kind=="instrument"&&path==file)return true;for(const auto& lane:lanes)if(lane.references(file))return true;return false; }
-        void collect(std::vector<juce::String>& sources) const { if(kind!="lanes")sources.push_back(source);for(const auto& lane:lanes)lane.collect(sources); }
+        void rename(const juce::String& from, const juce::String& to) {
+            if (kind == "instrument" && path == from) path = to;
+            for (auto& lane : lanes) lane.rename(from, to);
+        }
+        bool references(const juce::String& file) const {
+            if (kind == "instrument" && path == file) return true;
+            for (const auto& lane : lanes)
+                if (lane.references(file)) return true;
+            return false;
+        }
+        void collect(std::vector<juce::String>& sources) const {
+            if (kind != "lanes") sources.push_back(source);
+            for (const auto& lane : lanes) lane.collect(sources);
+        }
         bool pinned() const { return kind != "active"; }
     };
     struct OpenDocument {
@@ -98,28 +120,48 @@ private:
     std::atomic<std::uint64_t> audioDocumentRevision_{1};
     // A failed draft may retain historical source, but never audible DSP.
     std::atomic<bool> sourcePlayable_{false};
-    struct MacroBinding { ValueId value = invalid_value; double min = 0, max = 1; bool logarithmic = false; };
-    struct MacroMap { std::uint64_t revision = 0; std::array<MacroBinding,32> bindings{}; };
+    struct MacroBinding {
+        ValueId value = invalid_value;
+        double min = 0, max = 1;
+        bool logarithmic = false;
+    };
+    struct MacroMap {
+        std::uint64_t revision = 0;
+        std::array<MacroBinding, 32> bindings{};
+    };
     LatestMailbox<MacroMap> macroMaps_;
     MacroMap macros_;
     MacroMap waitingMacros_;
     std::array<juce::AudioParameterFloat*, 32> hostParams_{};
-    std::array<float,32> previousMacro_{};
-    struct HostPoint { int slot = 0, offset = 0; float value = 0; unsigned int duration = 0; float start = 0; int kind = 0; };
-    HostQueue<HostPoint,256> auPoints_;
+    std::array<float, 32> previousMacro_{};
+    struct HostPoint {
+        int slot = 0, offset = 0;
+        float value = 0;
+        unsigned int duration = 0;
+        float start = 0;
+        int kind = 0;
+    };
+    HostQueue<HostPoint, 256> auPoints_;
     std::atomic<bool> auOverflow_{false};
-    std::array<HostPoint,256> hostPoints_{};
+    std::array<HostPoint, 256> hostPoints_{};
     std::size_t hostPointCount_ = 0;
     bool rawHostPoints_ = false, hostPointOverflow_ = false;
-    struct KeyboardEvent { Event event; std::uint64_t documentRevision = 0; };
+    struct KeyboardEvent {
+        Event event;
+        std::uint64_t documentRevision = 0;
+    };
     SpscQueue<KeyboardEvent, 256> keyboard_;
-    struct MidiHeld { bool used = false; int channel = 0, pitch = 0; std::uint64_t id = 0, order = 0; };
-    std::array<MidiHeld,1024> midiHeld_{};
+    struct MidiHeld {
+        bool used = false;
+        int channel = 0, pitch = 0;
+        std::uint64_t id = 0, order = 0;
+    };
+    std::array<MidiHeld, 1024> midiHeld_{};
     std::uint64_t nextNote_ = 1, midiOrder_ = 0;
-    std::array<Event,256> blockEvents_{};
-    std::array<ParameterUpdate,256> blockParameters_{};
-    std::array<float,maxFrames> mono_{};
-    std::array<float,maxFrames> right_{};
+    std::array<Event, 256> blockEvents_{};
+    std::array<ParameterUpdate, 256> blockParameters_{};
+    std::array<float, maxFrames> mono_{};
+    std::array<float, maxFrames> right_{};
     RealtimeSession session_;
     SequenceBank sequenceSession_;
     std::atomic<double> rate_{48000};
@@ -129,16 +171,18 @@ private:
     std::atomic<bool> running_{false}, panic_{false}, demo_{false};
     std::atomic<bool> midiRelease_{false};
     std::atomic<std::uint64_t> hostOverflows_{0};
-    SequencePattern sequencePattern_ = rollingBassPattern(), pinnedSequencePattern_ = rollingBassPattern();
+    SequencePattern sequencePattern_ = rollingBassPattern(),
+                    pinnedSequencePattern_ = rollingBassPattern();
     SequenceSound documentSequenceSound_, sequenceSound_;
     juce::String sequenceOwner_, sequenceSoundStatus_ = "ready", sequenceSoundError_;
-    std::uint64_t sequenceUnitRevision_ = 1, sequenceUnitGeneration_ = 1, preparedSequenceUnitRevision_ = 0;
+    std::uint64_t sequenceUnitRevision_ = 1, sequenceUnitGeneration_ = 1,
+                  preparedSequenceUnitRevision_ = 0;
     double preparedSequenceRate_ = 0;
     std::atomic<bool> sequencePinned_{false}, sequencePanic_{false}, sequenceAuditionMuted_{false};
     std::atomic<bool> sequenceSourcePlayable_{false};
     std::atomic<std::uint64_t> sequenceTargetRevision_{1}, sequenceMinimumRevision_{1};
-    std::array<Event,256> sequenceEvents_{};
-    std::array<float,maxFrames> sequenceLeft_{}, sequenceRight_{}, clickLeft_{}, clickRight_{};
+    std::array<Event, 256> sequenceEvents_{};
+    std::array<float, maxFrames> sequenceLeft_{}, sequenceRight_{}, clickLeft_{}, clickRight_{};
     std::atomic<float> mixedPeak_{0};
     std::atomic<std::uint32_t> mixedVoices_{0};
     std::uint64_t sequenceRevision_ = 1;
@@ -174,8 +218,12 @@ private:
     std::shared_ptr<const juce::MemoryBlock> restore_;
     std::jthread worker_, aiWorker_, companionWorker_;
     juce::String companionId_;
-    struct CompanionProposal { juce::String source, before, documentId; std::uint64_t baseRevision=0, appliedRevision=0; bool applied=false, restored=false; };
-    std::map<juce::String,CompanionProposal> companionProposals_;
+    struct CompanionProposal {
+        juce::String source, before, documentId;
+        std::uint64_t baseRevision = 0, appliedRevision = 0;
+        bool applied = false, restored = false;
+    };
+    std::map<juce::String, CompanionProposal> companionProposals_;
     void companionLoop(std::stop_token);
     AIModels aiModels_;
     juce::var aiProfiles_;
@@ -188,8 +236,13 @@ private:
     std::atomic<bool> aiBusy_{false};
     std::atomic<std::uint64_t> aiGeneration_{0};
     std::vector<juce::var> agentEvents_;
-    struct Proposal { juce::String text; std::uint64_t revision; juce::String documentId, conversationId, baseSource; bool workspace = false; };
-    std::map<juce::String,Proposal> proposals_;
+    struct Proposal {
+        juce::String text;
+        std::uint64_t revision;
+        juce::String documentId, conversationId, baseSource;
+        bool workspace = false;
+    };
+    std::map<juce::String, Proposal> proposals_;
     void worker(std::stop_token);
     void updateCheckpointLocked();
     void updateMacrosLocked();
@@ -206,22 +259,27 @@ private:
     SequencePattern loadSequenceLocked(const juce::String&) const;
     SequenceSound loadSequenceSoundLocked(const juce::String&) const;
     SequenceSound parseSequenceSound(const juce::var&, bool capture) const;
-    juce::var sequenceStateJSON(const SequencePattern&, const SequenceSound&, bool includeSource = true) const;
-    void saveSequenceLocked(const juce::String&, const SequencePattern&, const SequenceSound&) const;
+    juce::var sequenceStateJSON(const SequencePattern&, const SequenceSound&,
+                                bool includeSource = true) const;
+    void saveSequenceLocked(const juce::String&, const SequencePattern&,
+                            const SequenceSound&) const;
     void selectSequenceSoundLocked(SequenceSound, const SequencePattern&, juce::String owner);
     void retainSequenceStateLocked();
     void remapSequenceSound(SequenceSound&, const SamplePathMap&) const;
-    const SequencePattern& displayedSequenceLocked() const { return sequenceSound_.pinned() ? pinnedSequencePattern_ : sequencePattern_; }
+    const SequencePattern& displayedSequenceLocked() const {
+        return sequenceSound_.pinned() ? pinnedSequencePattern_ : sequencePattern_;
+    }
     std::vector<juce::String> packageSourcesLocked() const;
     void configureWorkspace();
     void sendAI(const juce::var&);
     juce::var conversationViewLocked();
     juce::var readAIInstrumentLocked(const juce::String& path);
     bool proposalCurrentLocked(const Proposal&);
-    juce::var runAITool(const juce::String&, const juce::var&, const juce::String& source, const std::function<bool()>& externalCancel = {});
+    juce::var runAITool(const juce::String&, const juce::var&, const juce::String& source,
+                        const std::function<bool()>& externalCancel = {});
 };
 void beginHostAutomation(juce::AudioProcessor*) noexcept;
 void captureHostParameter(juce::AudioProcessor*, int, int, float) noexcept;
 void captureAUParameter(juce::AudioProcessor*, int, unsigned int, float) noexcept;
 void captureAURamp(juce::AudioProcessor*, int, int, unsigned int, float, float) noexcept;
-}
+}  // namespace flows::app

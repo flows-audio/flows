@@ -1,7 +1,8 @@
 #pragma once
-#include "Json.hpp"
 #include <functional>
 #include <mutex>
+
+#include "Json.hpp"
 
 namespace flows::app {
 // Injected in tests so persistence can be exercised without touching Keychain.
@@ -19,8 +20,11 @@ public:
     void save(const juce::var& params);
     void select(const juce::String& id);
     void remove(const juce::String& id);
-    struct Connection { juce::String endpoint, model, key; };
+    struct Connection {
+        juce::String endpoint, model, key;
+    };
     Connection connection(juce::var* metadata = nullptr);
+
 private:
     AISecrets secrets_;
     juce::File file_;
@@ -32,4 +36,4 @@ private:
     void commit(const juce::var& data);
     juce::var selected() const;
 };
-}
+}  // namespace flows::app
