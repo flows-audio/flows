@@ -2,6 +2,7 @@
 
 #include "Text.hpp"
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
@@ -24,14 +25,26 @@ std::string pathString(const fs::path& path) { return path.generic_string(); }
 std::optional<std::string> tryRead(const fs::path& file, std::size_t limit) {
     std::error_code error;
     if (!fs::is_regular_file(file, error) || error) return std::nullopt;
+    std::error_code sizeError;
+    const auto reported = fs::file_size(file, sizeError);
+    if (!sizeError && reported > limit) return std::nullopt;
     std::ifstream input(file, std::ios::binary);
     if (!input) return std::nullopt;
-    std::string bytes;
-    bytes.resize(limit + 1);
-    input.read(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+    // Size the buffer from the file rather than the limit: in WebAssembly a
+    // large allocation grows memory for the rest of the session. One byte more
+    // than expected reveals a file that grew; then the buffer grows to the limit.
+    const auto expected = sizeError ? std::min<std::size_t>(limit, 64 * 1024) : static_cast<std::size_t>(reported);
+    std::string bytes(expected + 1, '\0');
+    std::size_t used = 0;
+    for (;;) {
+        input.read(bytes.data() + used, static_cast<std::streamsize>(bytes.size() - used));
+        used += static_cast<std::size_t>(input.gcount());
+        if (used > limit) return std::nullopt;
+        if (!input) break;
+        bytes.resize(std::min(bytes.size() * 2, limit + 1));
+    }
     if (input.bad()) return std::nullopt;
-    bytes.resize(static_cast<std::size_t>(input.gcount()));
-    if (bytes.size() > limit) return std::nullopt;
+    bytes.resize(used);
     return bytes;
 }
 std::string read(const fs::path& file, std::size_t limit) {
@@ -144,7 +157,8 @@ fs::path nonexistentSibling(const fs::path& file) {
         const auto open = prefix.rfind('('), close = prefix.rfind(')');
         if (open != std::string::npos && open > 0 && close > open) {
             const auto digits = prefix.substr(open + 1, close - open - 1);
-            if (text::containsOnly(digits, "0123456789")) {
+            // Longer digit runs (dates, timestamps) are part of the name.
+            if (digits.size() <= 6 && text::containsOnly(digits, "0123456789")) {
                 number = digits.empty() ? 0 : std::stoi(digits);
                 prefix = prefix.substr(0, open);
             }

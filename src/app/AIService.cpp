@@ -363,16 +363,19 @@ json::Value AppCore::postAI(const std::string& endpoint, const std::string& key,
     }
     if (cancelled()) error("AI request cancelled.");
     json::Value decoded;
+    bool parsed = true;
     try {
         decoded = json::parseBounded(text::sanitizeUtf8(response.body), responseLimit);
     } catch (const std::exception&) {
-        error("AI endpoint returned invalid or over-budget JSON.");
+        parsed = false;
     }
+    // Gateways and proxies answer errors in HTML or plain text; report the status first.
     if (response.status < 200 || response.status >= 300) {
-        const auto provider = json::str(decoded["error"], "message");
+        const auto provider = parsed ? json::str(decoded["error"], "message") : std::string();
         error("AI endpoint returned HTTP " + std::to_string(response.status) +
               (!provider.empty() ? ": " + text::codePointSubstring(redact(provider, key), 0, 1000) : "."));
     }
+    if (!parsed) error("AI endpoint returned invalid or over-budget JSON.");
     if (!decoded.isObject()) error("AI endpoint returned invalid JSON.");
     return decoded;
 }
