@@ -50,8 +50,28 @@ test('edits source and recompiles in the WebAssembly core', async ({ page }) => 
   await expect(page.locator('.cm-content')).toContainText('Edited in the browser');
 });
 
+// A held note must keep sounding while the test polls the output peak, which
+// is the last block's; the starter bass is a pluck that decays within 120 ms.
+const sustainedSine = `import standard as std
+from lib.osc import ClassicSine
+from lib.env import ClassicADSR
+
+Inst.sigstream(std.event.keys.poly()) as key:
+    osc = ClassicSine.make()
+    env = ClassicADSR.make()
+    raw = osc(pitch: key.pitch, level: -12db)
+    amp = env(gate: key.gate, trigger: key.trigger, A: 5ms, D: 120ms, S: 0.65, R: 180ms)
+    return raw * amp * key.velocity
+`;
+
 test('plays a note through the audio worklet', async ({ page, browserName }) => {
   await open(page);
+  const starter = await call(page, 'session.get');
+  await call(page, 'document.apply', { documentId: starter.document.id, baseRevision: starter.document.revision, text: sustainedSine });
+  await expect.poll(async () => {
+    const current = await call(page, 'session.get');
+    return current.compile.status === 'ready' && current.compile.revision === current.document.revision;
+  }).toBe(true);
   // A click anywhere starts audio; resuming the context can take a moment.
   await page.locator('.document-toolbar').click();
   const state = await page.waitForFunction(() => {
@@ -63,10 +83,18 @@ test('plays a note through the audio worklet', async ({ page, browserName }) => 
   // without an output device may not start audio; those runs skip.
   if (process.env.CI && browserName !== 'webkit') expect(state, `${browserName} audio state`).toBe('running');
   else test.skip(state !== 'running', `${browserName} did not start audio in this environment (${state})`);
+  // The audio thread installs the compiled program once it renders.
+  await expect.poll(async () => {
+    const current = await call(page, 'session.get');
+    return current.audio.running && current.audio.programRevision === current.document.revision;
+  }).toBe(true);
   const snapshot = await call(page, 'session.get');
-  await expect.poll(async () => (await call(page, 'session.get')).audio.running).toBe(true);
   await call(page, 'keyboard.noteOn', { noteId: 1, pitch: 60, velocity: 0.9, documentId: snapshot.document.id });
-  await expect.poll(async () => (await call(page, 'session.get')).audio.peak, { timeout: 10_000 }).toBeGreaterThan(0.01);
+  // On failure the last value says whether the note reached a voice at all.
+  await expect.poll(async () => {
+    const audio = (await call(page, 'session.get')).audio;
+    return audio.peak > 0.01 ? 'sounding' : `silent: peak ${audio.peak}, voices ${audio.voices}, cpu ${audio.cpu}, running ${audio.running}`;
+  }, { timeout: 10_000 }).toBe('sounding');
   await call(page, 'keyboard.noteOff', { noteId: 1, pitch: 60, documentId: snapshot.document.id });
   await expect(page.locator('.audio-device .connection-dot.active')).toBeVisible();
 });

@@ -48,11 +48,11 @@ void AudioRuntime::prepare(double sampleRate, int samplesPerBlock) noexcept {
     rate.store(sampleRate);
     blockSize.store(samplesPerBlock);
     running.store(true);
-    panic.store(true);
+    restart.store(true);
 }
 void AudioRuntime::release() noexcept {
     running.store(false);
-    panic.store(true);
+    restart.store(true);
     sequencePanic.store(true);
     session.requestPanic();
     sequenceSession.requestPanic();
@@ -130,12 +130,14 @@ void AudioRuntime::process(const AudioBlock& block) noexcept {
     if (auPoints_.hasPending()) hostPointOverflow_ = true;
     const bool automationOverflow = hostPointOverflow_ || auOverflow_.exchange(false);
     if (automationOverflow) hostOverflows.fetch_add(1);
-    if (panic.exchange(false) || automationOverflow) {
+    const bool panicked = panic.exchange(false) || automationOverflow;
+    if (restart.exchange(false) || panicked) {
         session.requestPanic();
         for (auto& h : midiHeld_) h.used = false;
         KeyboardEvent discarded;
-        for (std::size_t i = 0; i < 256 && keyboard.pop(discarded); ++i) {
-        }
+        if (panicked)
+            for (std::size_t i = 0; i < 256 && keyboard.pop(discarded); ++i) {
+            }
         if (!pinned) {
             sequencer_.reset();
             sequencePlayhead.store(-1);

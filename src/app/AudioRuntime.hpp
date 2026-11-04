@@ -98,6 +98,10 @@ public:
     std::atomic<bool> hostTempo{false};
     std::atomic<int> blockSize{256};
     std::atomic<bool> running{false}, panic{false}, demo{false};
+    // Like panic (voices, held MIDI and the free-running pattern reset at the
+    // next block) but keeps UI notes queued after it: audio (re)starting must
+    // not drop the key press that started it.
+    std::atomic<bool> restart{false};
     std::atomic<std::uint64_t> hostOverflows{0};
     std::atomic<bool> sequencePinned{false}, sequencePanic{false}, sequenceAuditionMuted{false};
     std::atomic<bool> sequenceSourcePlayable{false};

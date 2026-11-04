@@ -259,7 +259,7 @@ EMSCRIPTEN_KEEPALIVE void flows_audio_running(int running, double sampleRate) {
     if (running) {
         audio.rate.store(sampleRate);
         audio.running.store(true);
-        audio.panic.store(true);
+        audio.restart.store(true);
     } else
         audio.release();
 }
