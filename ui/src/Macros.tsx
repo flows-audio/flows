@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from './Icon';
-import { request } from './native';
+import { request } from './client';
 import { Parameter, Snapshot } from './types';
 
 export function Macros({ snapshot, parameter, onClose, onResult, onError }: { snapshot: Snapshot | null; parameter: Parameter | null; onClose: () => void; onResult: (result: any) => void; onError: (error: unknown) => void }) {

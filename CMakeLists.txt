@@ -30,9 +30,35 @@ endif()
 add_executable(flows src/host/offline_main.cpp)
 target_link_libraries(flows PRIVATE flows_core)
 
-add_library(flows_session src/host/app/RealtimeSession.cpp src/host/app/Analyzer.cpp)
+add_library(flows_session src/app/RealtimeSession.cpp src/app/Analyzer.cpp)
 target_link_libraries(flows_session PUBLIC flows_core)
 set_target_properties(flows_session PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Portable application core: documents, compilation, sequencer, packages,
+# recovery, AI tools and the audio runtime. No JUCE; every host links it.
+find_package(Threads REQUIRED)
+add_library(flows_app
+    src/app/Json.cpp
+    src/app/Text.cpp
+    src/app/Files.cpp
+    src/app/WorkspaceLayout.cpp
+    src/app/AIEndpoint.cpp
+    src/app/SampleAssets.cpp
+    src/app/AssistantHistory.cpp
+    src/app/AIModels.cpp
+    src/app/AudioRuntime.cpp
+    src/app/Protocol.cpp
+    src/app/AppCore.cpp
+    src/app/AppCoreWorker.cpp
+    src/app/AIService.cpp
+    src/app/LiveCompanion.cpp
+)
+target_link_libraries(flows_app PUBLIC flows_session Threads::Threads)
+target_compile_definitions(flows_app PRIVATE FLOWS_VERSION="${PROJECT_VERSION}")
+set_target_properties(flows_app PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(flows_app PRIVATE -Wall -Wextra -Wpedantic -fno-fast-math)
+endif()
 
 option(FLOWS_BUILD_APP "Build native Flows standalone, AU and VST3" OFF)
 if(FLOWS_BUILD_APP)
@@ -73,18 +99,26 @@ if(FLOWS_BUILD_APP)
         add_test(NAME markdown_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/markdown.test.mjs)
         add_test(NAME assistant_history_ui COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/ui/test/assistantHistory.test.mjs)
     endif()
-    add_custom_command(OUTPUT "${CMAKE_CURRENT_SOURCE_DIR}/ui/dist/index.html" "${CMAKE_CURRENT_SOURCE_DIR}/ui/dist/assets/index.js" "${CMAKE_CURRENT_SOURCE_DIR}/ui/dist/assets/index.css"
-        COMMAND ${NPM_EXECUTABLE} run build WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ui"
-        DEPENDS ui/package.json ui/package-lock.json ui/vite.config.ts ui/tsconfig.json ui/src/App.tsx ui/src/Editor.tsx ui/src/Agent.tsx ui/src/Signals.tsx ui/src/Keyboard.tsx ui/src/native.ts ui/src/types.ts ui/src/style.css ui/src/telemetry.ts ui/src/observation.ts ui/src/Icon.tsx ui/src/main.tsx ui/src/Macros.tsx ui/src/Dataflow.tsx ui/src/Dataflow.css ui/src/flowLayout.ts ui/src/ResizeHandle.tsx ui/src/parameterDefault.ts ui/src/parameterDrag.ts ui/src/ParameterInput.ts ui/src/signalDisplay.ts ui/src/signalPlot.ts ui/src/plotMath.ts
-        DEPENDS ui/src/panelVisibility.ts ui/src/documents.ts ui/src/probeSelection.ts
-        DEPENDS ui/src/Explorer.tsx ui/src/Explorer.css ui/src/explorerTree.ts ui/src/samplePath.ts
-        DEPENDS ui/src/ChoiceMenu.tsx ui/src/ChoiceMenu.css ui/src/choice.ts
-        DEPENDS ui/src/languageCatalog.ts ui/src/completionModel.ts ui/src/flowsCompletion.ts
-        DEPENDS ui/src/StepSequencer.tsx ui/src/StepSequencer.css ui/src/sequencer.ts
-        DEPENDS ui/src/Agent.css ui/src/AgentActivity.tsx ui/src/assistantHistory.ts ui/src/Markdown.tsx ui/src/Markdown.css
+    # The editor is whatever Vite builds: every file in ui/dist is embedded for
+    # the WebView, so code-split chunks, workers and icons need no C++ change.
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    file(GLOB_RECURSE FLOWS_UI_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/ui/src/*" "${CMAKE_CURRENT_SOURCE_DIR}/ui/public/*")
+    set(FLOWS_UI_STAMP "${CMAKE_BINARY_DIR}/generated/ui-build.stamp")
+    set(FLOWS_UI_SOURCE "${CMAKE_BINARY_DIR}/generated/FlowsUi.cpp")
+    add_custom_command(OUTPUT "${FLOWS_UI_STAMP}"
+        COMMAND ${NPM_EXECUTABLE} run build
+        COMMAND ${CMAKE_COMMAND} -E touch "${FLOWS_UI_STAMP}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/ui"
+        DEPENDS ${FLOWS_UI_SOURCES} ui/index.html ui/package.json ui/package-lock.json ui/vite.config.ts ui/tsconfig.json
+            protocol/flows-protocol.json
         COMMENT "Building Flows editor")
+    add_custom_command(OUTPUT "${FLOWS_UI_SOURCE}"
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/embed_ui.py"
+            "${CMAKE_CURRENT_SOURCE_DIR}/ui/dist" "${FLOWS_UI_SOURCE}"
+        DEPENDS "${FLOWS_UI_STAMP}" tools/embed_ui.py
+        COMMENT "Embedding Flows editor files")
     juce_add_binary_data(FlowsAssets NAMESPACE FlowsAssets HEADER_NAME FlowsAssets.h SOURCES
-        ui/dist/index.html ui/dist/assets/index.js ui/dist/assets/index.css
         test/presets/sine-reference.flows test/presets/probe-lab.flows
         test/presets/mono-legato-glide.flows test/presets/trance-rolling-bass.flows
         test/presets/stereo-motion.flows test/presets/sample-one-shot.flows test/presets/sample-loop.flows
@@ -97,8 +131,9 @@ if(FLOWS_BUILD_APP)
         IS_MIDI_EFFECT FALSE EDITOR_WANTS_KEYBOARD_FOCUS TRUE
         COPY_PLUGIN_AFTER_BUILD FALSE AU_MAIN_TYPE kAudioUnitType_MusicDevice
         VST3_CATEGORIES Instrument Synth)
-    target_sources(FlowsPlugin PRIVATE src/host/app/SampleAssets.cpp src/host/app/AssistantHistory.cpp src/host/app/FlowsProcessor.cpp src/host/app/LiveCompanion.cpp src/host/app/FlowsEditor.cpp src/host/app/AIService.cpp src/host/app/AIModels.cpp src/host/app/AISecrets.mm src/host/app/MacAppearance.mm)
-    target_link_libraries(FlowsPlugin PRIVATE flows_session FlowsAssets "-framework Security"
+    target_sources(FlowsPlugin PRIVATE src/host/app/FlowsProcessor.cpp src/host/app/FlowsEditor.cpp
+        src/host/app/JuceServices.cpp src/host/app/AISecrets.mm src/host/app/MacAppearance.mm "${FLOWS_UI_SOURCE}")
+    target_link_libraries(FlowsPlugin PRIVATE flows_app FlowsAssets "-framework Security"
         juce::juce_audio_utils juce::juce_gui_extra juce::juce_dsp juce::juce_cryptography
         PUBLIC juce::juce_recommended_config_flags)
     target_compile_definitions(FlowsPlugin PUBLIC JUCE_WEB_BROWSER=1 JUCE_USE_CURL=0 JUCE_VST3_CAN_REPLACE_VST2=0)
@@ -127,12 +162,6 @@ if(FLOWS_BUILD_APP)
     target_compile_definitions(FlowsStandalone PRIVATE FLOWS_STANDALONE_NAME="${FLOWS_STANDALONE_NAME}")
     target_link_libraries(FlowsStandalone PRIVATE FlowsPlugin)
     if(BUILD_TESTING AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/cpp/host_tests.cpp")
-        juce_add_console_app(AssistantHistoryTests PRODUCT_NAME "Flows Assistant History Tests")
-        target_sources(AssistantHistoryTests PRIVATE test/cpp/assistant_history_tests.cpp src/host/app/AssistantHistory.cpp)
-        target_include_directories(AssistantHistoryTests PRIVATE src/host/app)
-        target_link_libraries(AssistantHistoryTests PRIVATE juce::juce_core)
-        target_compile_definitions(AssistantHistoryTests PRIVATE JUCE_USE_CURL=0)
-        add_test(NAME assistant_history COMMAND AssistantHistoryTests)
         juce_add_console_app(LiveCompanionTests PRODUCT_NAME "Flows Live Companion Tests")
         target_sources(LiveCompanionTests PRIVATE test/cpp/live_companion_tests.cpp)
         target_link_libraries(LiveCompanionTests PRIVATE FlowsPlugin)
@@ -168,6 +197,10 @@ if(BUILD_TESTING)
     add_executable(compiler_tests test/cpp/compiler_tests.cpp)
     target_link_libraries(compiler_tests PRIVATE flows_core)
     add_test(NAME compiler COMMAND compiler_tests)
+
+    add_executable(assistant_history_tests test/cpp/assistant_history_tests.cpp)
+    target_link_libraries(assistant_history_tests PRIVATE flows_app)
+    add_test(NAME assistant_history COMMAND assistant_history_tests)
 
     add_executable(developer_tests test/cpp/developer_tests.cpp)
     target_link_libraries(developer_tests PRIVATE flows_session)

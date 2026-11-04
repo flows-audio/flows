@@ -1,7 +1,7 @@
 import { Children, isValidElement, memo, useState, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { nativeAvailable, request } from './native';
+import { hostCapabilities, request } from './client';
 import './Markdown.css';
 
 // Assistant output is untrusted. Accept explicit web links, never host-resource
@@ -19,14 +19,15 @@ function MarkdownLink({ href, children, title }: { href?: string; children: Reac
   const safe = safeMarkdownUrl(href || '');
   if (!safe) return <span>{children}</span>;
   return <><a href={safe} target="_blank" rel="noopener noreferrer" title={title} onClick={event => {
-    if (!nativeAvailable) return;
+    // Hosts that cannot open a browser tab themselves (the WebView) open links natively.
+    if (hostCapabilities()?.externalLinks !== 'native') return;
     event.preventDefault(); setError('');
     void request('browser.open', { url: safe }).catch(() => setError('Could not open this link.'));
   }}>{children}</a>{error && <span className="markdown-action-error" role="status"> {error}</span>}</>;
 }
 
 async function copyCode(text: string): Promise<void> {
-  if (nativeAvailable) { await request('clipboard.write', { text }); return; }
+  if (hostCapabilities()?.clipboard === 'native') { await request('clipboard.write', { text }); return; }
   if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
   await navigator.clipboard.writeText(text);
 }

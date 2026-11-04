@@ -7,7 +7,7 @@ import { Agent } from './Agent';
 import { Keyboard } from './Keyboard';
 import { Icon } from './Icon';
 import { AudioReadout, TempoControl, SignalView } from './Signals';
-import { nativeAvailable, request, subscribe } from './native';
+import { hostAvailable, request, subscribe } from './client';
 import { publishTelemetry, resetTelemetry, selectObservationVoice, selectObservationProjection } from './telemetry';
 import { Parameter, Snapshot, Telemetry } from './types';
 import { Macros } from './Macros';
@@ -55,7 +55,7 @@ export function App() {
   const groupStorageKey = useRef('');
   const updateGroups = useCallback((next: EditorGroup[]) => { groupsRef.current = next; setGroups(next); }, []);
   const [theme, setTheme] = useState(savedPreference('theme', 'moss')), [opacity, setOpacity] = useState(Number(savedPreference('opacity', '1')));
-  const [preferencesLoaded, setPreferencesLoaded] = useState(!nativeAvailable);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(!hostAvailable());
   const [split, setSplit] = useState(savedPreference('split', 'none')), [settings, setSettings] = useState(false);
   const [fontFamily, setFontFamily] = useState(savedPreference('fontFamily', DEFAULT_FONT)), [fontSize, setFontSize] = useState(migrateFont(savedNumber('fontSize', 16), savedNumber('layoutVersion', 0)));
   const [leftWidth, setLeftWidth] = useState(clamp(savedNumber('leftWidth', LAYOUT.leftWidth), 120, 520));
@@ -250,7 +250,7 @@ export function App() {
     if (audition && audition !== expanded) listen(audition, false);
   }, [expanded, activeId, listen]);
   useEffect(() => {
-    if (!nativeAvailable) return;
+    if (!hostAvailable()) return;
     const state = subscribe<Snapshot>('flowsState', receive), audio = subscribe<Telemetry>('flowsTelemetry', publishTelemetry);
     void request('session.get').then(receive).catch(notifyError);
     return () => { state(); audio(); clearTimeout(timer.current); timer.current = undefined; };
@@ -261,11 +261,11 @@ export function App() {
     document.documentElement.style.fontSize = `${12 * fontSize / 16}px`;
   }, [theme, opacity, fontFamily, fontSize, windowTransparency]);
   useEffect(() => {
-    if (nativeAvailable && !preferencesLoaded) return;
+    if (hostAvailable() && !preferencesLoaded) return;
     const preferences = { theme, opacity, split, fontFamily, fontSize, leftWidth, rightWidth, flowHeight, splitRatio, layoutVersion: 2, showExplorer, showAssistant, showDataflow, showKeyboard };
     const timer = setTimeout(() => {
       try { for (const [key, value] of Object.entries(preferences)) localStorage.setItem(`flows.${key}`, String(value)); } catch { /* Native preferences remain available. */ }
-      if (nativeAvailable) void request('preferences.set', preferences).catch(notifyError);
+      if (hostAvailable()) void request('preferences.set', preferences).catch(notifyError);
     }, 180);
     return () => clearTimeout(timer);
   }, [theme, opacity, split, fontFamily, fontSize, leftWidth, rightWidth, flowHeight, splitRatio, showExplorer, showAssistant, showDataflow, showKeyboard, preferencesLoaded, notifyError]);
@@ -337,7 +337,7 @@ export function App() {
     const selection = JSON.parse(probeSelectionKey) as { documentId?: string; signals: string[]; voice: number; projection: Projection; status?: string; focus?: string };
     let current = true;
     const stillActive = () => current && selection.documentId === desiredDocument.current && selection.documentId === acknowledged.current?.document.id;
-    if (nativeAvailable && selection.status === 'ready' && selection.documentId
+    if (hostAvailable() && selection.status === 'ready' && selection.documentId
       && stillActive()) {
       void subscribeObservation(signals => {
         if (!stillActive()) return Promise.reject(new Error('Observation request was superseded'));
@@ -382,7 +382,7 @@ export function App() {
     const signal = state?.document.text === text ? state.compile.signals?.find(signal => signal.name === name) : undefined;
     if (signal) revealSource(signal.from, signal.to);
   }, [text, revealSource]);
-  const documentState = session.document(activeId), connected = nativeAvailable && Boolean(snapshot);
+  const documentState = session.document(activeId), connected = hostAvailable() && Boolean(snapshot);
   const instrumentReady = connected && !!activeId && snapshot?.document.id === activeId;
   const keyboardReady = instrumentReady && !editing && snapshot?.compile.status === 'ready' && snapshot.compile.revision === documentState?.revision;
   const sequencerOwnerId = snapshot?.sequencer?.ownerDocumentId || activeId;

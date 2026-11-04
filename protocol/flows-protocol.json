@@ -1,0 +1,291 @@
+{
+  "$comment": "The Flows UI <-> host protocol. Edit this file, then run `npm run protocol --prefix ui` to regenerate ui/src/protocol.gen.ts. The native and WebAssembly cores are both tested against it (see protocol/README.md).",
+  "version": 1,
+  "owners": {
+    "core": "Implemented once by the portable C++ core (src/app). Every host forwards it unchanged.",
+    "host": "Implemented by every host with platform services (dialogs, clipboard, links, device settings).",
+    "web": "Implemented only by the browser host."
+  },
+  "events": {
+    "flowsState": { "summary": "Changed top-level snapshot slices, about five times a second.", "payload": { "$ref": "#/$defs/StateEvent" } },
+    "flowsTelemetry": { "summary": "Latest analysis and meters, up to 30 times a second.", "payload": { "$ref": "#/$defs/Telemetry" } },
+    "flowsAgent": { "summary": "Assistant progress and completion.", "payload": { "$ref": "#/$defs/AgentEvent" } }
+  },
+  "methods": {
+    "session.get": { "owner": "core", "summary": "Full snapshot.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "document.new": {
+      "owner": "core", "summary": "Create an instrument from the starter template or an imported sample, and open it.",
+      "params": { "type": "object", "properties": { "name": { "type": "string" }, "folder": { "type": "string" }, "samplePath": { "type": "string" }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "document.open": { "owner": "core", "summary": "Open a workspace instrument as a tab and activate it.", "params": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string" }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "document.activate": { "owner": "core", "summary": "Make an open instrument the one that plays.", "params": { "type": "object", "required": ["documentId"], "properties": { "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "document.close": {
+      "owner": "core", "summary": "Close a tab. Unsaved changes need save or discard.",
+      "params": { "type": "object", "properties": { "documentId": { "type": "string" }, "save": { "type": "boolean" }, "discard": { "type": "boolean" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "document.apply": {
+      "owner": "core", "summary": "Replace the active source. Revision-checked; gestures coalesce undo steps.",
+      "params": { "type": "object", "required": ["documentId", "baseRevision", "text"], "properties": {
+        "documentId": { "type": "string" }, "baseRevision": { "type": "integer" }, "text": { "type": "string" },
+        "gestureId": { "type": "string" }, "gesturePhase": { "type": "string" }, "transactionId": { "type": "string" }, "conflict": { "type": "boolean" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "document.save": { "owner": "core", "summary": "Write a document and its sequencer pattern to the workspace.", "params": { "$ref": "#/$defs/DocumentParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "document.rename": { "owner": "core", "summary": "Rename the active instrument file.", "params": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "document.undo": { "owner": "core", "summary": "Undo the last source change of the active instrument.", "params": { "$ref": "#/$defs/DocumentParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "document.redo": { "owner": "core", "summary": "Redo.", "params": { "$ref": "#/$defs/DocumentParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "compile": { "owner": "core", "summary": "Recompile the active revision.", "params": { "type": "object", "required": ["revision"], "properties": { "revision": { "type": "integer" }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "workspace.import": {
+      "owner": "core", "summary": "Add a dropped instrument or audio file (Base64) to a workspace folder.",
+      "params": { "type": "object", "required": ["folder", "name", "data"], "properties": { "folder": { "type": "string" }, "name": { "type": "string" }, "data": { "type": "string", "contentEncoding": "base64" }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/ImportResult" }
+    },
+    "keyboard.noteOn": {
+      "owner": "core", "summary": "Play a note from on-screen or computer keys.",
+      "params": { "type": "object", "required": ["noteId", "pitch", "velocity"], "properties": { "noteId": { "type": "integer", "minimum": 0 }, "pitch": { "type": "number", "minimum": 0, "maximum": 127 }, "velocity": { "type": "number", "minimum": 0, "maximum": 1 }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "keyboard.noteOff": {
+      "owner": "core", "summary": "Release a note started with keyboard.noteOn.",
+      "params": { "type": "object", "required": ["noteId"], "properties": { "noteId": { "type": "integer", "minimum": 0 }, "pitch": { "type": "number" }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "keyboard.panic": { "owner": "core", "summary": "Release every voice and stop the sequencer.", "params": { "$ref": "#/$defs/DocumentParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "audio.playDemo": { "owner": "core", "summary": "Toggle sequencer playback.", "params": { "$ref": "#/$defs/DocumentParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "sequencer.set": {
+      "owner": "core", "summary": "Replace the step pattern (and optionally its sound). Revision-checked.",
+      "params": { "type": "object", "required": ["baseRevision", "pattern"], "properties": { "baseRevision": { "type": "integer" }, "pattern": { "$ref": "#/$defs/SequencerPattern" }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "sequencer.sound": {
+      "owner": "core", "summary": "Choose the sequencer's sound without changing steps.",
+      "params": { "type": "object", "required": ["baseRevision", "sound"], "properties": { "baseRevision": { "type": "integer" }, "sound": { "$ref": "#/$defs/SequencerSound" }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "sequencer.play": { "owner": "core", "summary": "Start or stop the sequencer.", "params": { "type": "object", "required": ["playing"], "properties": { "playing": { "type": "boolean" }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "probe.set": {
+      "owner": "core", "summary": "Choose observed signals, voice and stereo projection.",
+      "params": { "type": "object", "required": ["signals", "voice"], "properties": { "signals": { "type": "array", "maxItems": 128, "items": { "type": "string" } }, "voice": { "oneOf": [{ "type": "integer", "minimum": -1, "maximum": 31 }, { "const": "mixed" }] }, "projection": { "$ref": "#/$defs/Projection" }, "documentId": { "type": "string" } } },
+      "result": { "$ref": "#/$defs/Snapshot" }
+    },
+    "probe.listen": { "owner": "core", "summary": "Audition a named audio signal instead of the instrument output.", "params": { "type": "object", "required": ["signal", "enabled"], "properties": { "signal": { "type": "string" }, "enabled": { "type": "boolean" }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "parameter.export": { "owner": "core", "summary": "Bind a live source parameter to a host macro slot (1-32).", "params": { "type": "object", "required": ["slot", "bindingId"], "properties": { "slot": { "type": "integer", "minimum": 1, "maximum": 32 }, "bindingId": { "type": "string" }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "parameter.unexport": { "owner": "core", "summary": "Clear a macro slot.", "params": { "type": "object", "required": ["slot"], "properties": { "slot": { "type": "integer", "minimum": 1, "maximum": 32 }, "documentId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "transport.set": { "owner": "core", "summary": "Set the internal tempo.", "params": { "type": "object", "required": ["bpm"], "properties": { "bpm": { "type": "number", "minimum": 20, "maximum": 300 } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "preferences.set": { "owner": "core", "summary": "Patch interface preferences.", "params": { "$ref": "#/$defs/PreferencesPatch" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "project.importText": { "owner": "core", "summary": "Open an instrument package (.flowsinst text) as a new tab.", "params": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "project.exportText": { "owner": "core", "summary": "The active instrument as portable package text.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "type": "string" } },
+    "ai.send": {
+      "owner": "core", "summary": "Start an assistant request; progress arrives as flowsAgent events.",
+      "params": { "type": "object", "required": ["requestId", "prompt"], "properties": { "requestId": { "type": "string" }, "prompt": { "type": "string" }, "conversationId": { "type": "string" }, "referencePath": { "type": "string" }, "documentId": { "type": "string" }, "baseRevision": { "type": "integer" } } },
+      "result": { "type": "object", "required": ["status", "requestId", "conversationId"], "properties": { "status": { "const": "working" }, "requestId": { "type": "string" }, "conversationId": { "type": "string" } } },
+      "timeoutMs": 180000
+    },
+    "ai.cancel": { "owner": "core", "summary": "Cancel the running assistant request.", "params": { "type": "object", "properties": { "requestId": { "type": "string" } } }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.apply": { "owner": "core", "summary": "Apply a reviewed assistant proposal to its open instrument.", "params": { "$ref": "#/$defs/ProposalParams" }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.create": { "owner": "core", "summary": "Save a reviewed proposal as a new instrument in AI-gen.", "params": { "$ref": "#/$defs/ProposalParams" }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.configure": { "owner": "core", "summary": "Alias of ai.models.save.", "params": { "$ref": "#/$defs/ModelProfileParams" }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.models.save": { "owner": "core", "summary": "Add or edit a model profile; the key goes to the host's secret store.", "params": { "$ref": "#/$defs/ModelProfileParams" }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.models.select": { "owner": "core", "summary": "Select the model profile used for new requests.", "params": { "$ref": "#/$defs/IdParams" }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.models.remove": { "owner": "core", "summary": "Remove a model profile and its stored key.", "params": { "$ref": "#/$defs/IdParams" }, "result": { "$ref": "#/$defs/Snapshot" }, "timeoutMs": 180000 },
+    "ai.conversations.list": { "owner": "core", "summary": "Conversation history.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.create": { "owner": "core", "summary": "Start a conversation.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.select": { "owner": "core", "summary": "Show a conversation.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.rename": { "owner": "core", "summary": "Rename a conversation.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.archive": { "owner": "core", "summary": "Archive a conversation.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.delete": { "owner": "core", "summary": "Move a conversation to Trash.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.restore": { "owner": "core", "summary": "Restore from archive or Trash.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "ai.conversations.purge": { "owner": "core", "summary": "Permanently delete a conversation in Trash.", "params": { "$ref": "#/$defs/ConversationParams" }, "result": { "$ref": "#/$defs/HistoryView" }, "timeoutMs": 180000 },
+    "audio.settings": { "owner": "host", "summary": "Open the host's audio and MIDI device settings (capabilities.audioSettings).", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "clipboard.write": { "owner": "host", "summary": "Copy text.", "params": { "type": "object", "required": ["text"], "properties": { "text": { "type": "string" } } }, "result": { "$ref": "#/$defs/Ack" } },
+    "browser.open": { "owner": "host", "summary": "Open an HTTP(S) link outside the app.", "params": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string" } } }, "result": { "$ref": "#/$defs/Ack" } },
+    "sample.import": { "owner": "host", "summary": "Pick an audio file with the native dialog and import it into Samples.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/ImportResult" } },
+    "project.import": { "owner": "host", "summary": "Pick and open an instrument package with the native dialog.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "project.export": { "owner": "host", "summary": "Save the active instrument package with the native dialog.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/Snapshot" } },
+    "audio.devices": { "owner": "web", "summary": "Browser audio output state and Web MIDI inputs.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/AudioDevices" } },
+    "audio.start": { "owner": "web", "summary": "Start or resume browser audio (call from a user gesture).", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/AudioDevices" } },
+    "audio.suspend": { "owner": "web", "summary": "Pause browser audio output.", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/AudioDevices" } },
+    "midi.enable": { "owner": "web", "summary": "Enable or disable a Web MIDI input. Choices persist per browser.", "params": { "type": "object", "required": ["id", "enabled"], "properties": { "id": { "type": "string" }, "enabled": { "type": "boolean" } } }, "result": { "$ref": "#/$defs/AudioDevices" } },
+    "midi.request": { "owner": "web", "summary": "Ask the browser for MIDI access (call from a user gesture).", "params": { "$ref": "#/$defs/NoParams" }, "result": { "$ref": "#/$defs/AudioDevices" } }
+  },
+  "$defs": {
+    "NoParams": { "type": "object", "properties": {} },
+    "DocumentParams": { "type": "object", "properties": { "documentId": { "type": "string" } } },
+    "IdParams": { "type": "object", "required": ["id"], "properties": { "id": { "type": "string" } } },
+    "ConversationParams": { "type": "object", "properties": { "conversationId": { "type": "string" }, "title": { "type": "string" } } },
+    "ProposalParams": { "type": "object", "required": ["requestId", "text"], "properties": { "requestId": { "type": "string" }, "text": { "type": "string" }, "documentId": { "type": "string" }, "baseRevision": { "type": "integer" } } },
+    "ModelProfileParams": { "type": "object", "required": ["endpoint", "model"], "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "endpoint": { "type": "string" }, "model": { "type": "string" }, "apiKey": { "type": "string" } } },
+    "Ack": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } } },
+    "Projection": { "enum": ["mid", "left", "right", "side"] },
+    "Capabilities": {
+      "type": "object",
+      "description": "What this host can do. UI features branch on these, never on the transport.",
+      "required": ["protocol", "host", "windowTransparency", "audioSettings", "midiInput", "storage", "secrets", "fileDialogs", "clipboard", "externalLinks", "liveBridge", "ai", "version", "sourceUrl"],
+      "properties": {
+        "protocol": { "type": "integer" },
+        "host": { "enum": ["macos-standalone", "macos-plugin", "web", "embedded"] },
+        "windowTransparency": { "type": "boolean" },
+        "audioSettings": { "enum": ["native-dialog", "plugin-host", "in-app", "none"] },
+        "midiInput": { "enum": ["native", "plugin-host", "web", "none"] },
+        "storage": { "enum": ["filesystem", "browser", "memory"] },
+        "secrets": { "enum": ["keychain", "session", "none"] },
+        "fileDialogs": { "enum": ["native", "browser", "none"] },
+        "clipboard": { "enum": ["native", "browser", "none"] },
+        "externalLinks": { "enum": ["native", "browser", "none"] },
+        "liveBridge": { "type": "boolean" },
+        "ai": { "type": "boolean" },
+        "version": { "type": "string" },
+        "sourceUrl": { "type": "string" }
+      }
+    },
+    "Document": {
+      "type": "object", "required": ["id", "path", "text", "revision"],
+      "properties": { "id": { "type": "string" }, "path": { "type": "string" }, "text": { "type": "string" }, "revision": { "type": "integer" }, "savedRevision": { "type": "integer" }, "dirty": { "type": "boolean" } }
+    },
+    "OpenDocument": { "allOf": [{ "$ref": "#/$defs/Document" }, { "type": "object", "required": ["compile"], "properties": { "compile": { "$ref": "#/$defs/CompileView" } } }] },
+    "Signal": {
+      "type": "object", "required": ["name", "from", "to"],
+      "properties": { "name": { "type": "string" }, "kind": { "type": "string" }, "shape": { "type": "string" }, "unit": { "type": "string" }, "captureRoots": { "type": "array", "items": { "type": "integer" } }, "channels": { "type": "integer" }, "auditionable": { "type": "boolean" }, "from": { "type": "integer" }, "to": { "type": "integer" } }
+    },
+    "Parameter": {
+      "type": "object", "required": ["id", "from", "to", "value", "min", "max"],
+      "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "from": { "type": "integer" }, "to": { "type": "integer" }, "value": { "type": "number" }, "unit": { "type": "string" }, "hasRange": { "type": "boolean" }, "min": { "type": "number" }, "max": { "type": "number" }, "step": { "type": "number" }, "discrete": { "type": "boolean" }, "scale": { "type": "string" }, "response": { "type": "string" }, "responseOffset": { "type": "number" }, "update": { "type": "string" }, "hasDefault": { "type": "boolean" }, "defaultValue": { "type": "number" } }
+    },
+    "ChoiceOption": { "type": "object", "required": ["value", "enabled"], "properties": { "value": { "type": "string" }, "enabled": { "type": "boolean" }, "reason": { "type": "string" } } },
+    "Choice": {
+      "type": "object", "required": ["id", "name", "value", "from", "to", "implicit", "prefix", "suffix", "options"],
+      "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "value": { "type": "string" }, "from": { "type": "integer" }, "to": { "type": "integer" }, "implicit": { "type": "boolean" }, "prefix": { "type": "string" }, "suffix": { "type": "string" }, "options": { "type": "array", "items": { "$ref": "#/$defs/ChoiceOption" } } }
+    },
+    "FlowNode": {
+      "type": "object", "required": ["id", "label", "op", "kind", "signal", "from", "to", "parameterIds"],
+      "properties": { "id": { "type": "string" }, "label": { "type": "string" }, "op": { "type": "string" }, "kind": { "enum": ["audio", "control", "analysis"] }, "signal": { "type": "string" }, "from": { "type": "integer" }, "to": { "type": "integer" }, "parameterIds": { "type": "array", "items": { "type": "string" } }, "choiceIds": { "type": "array", "items": { "type": "string" } } }
+    },
+    "FlowEdge": { "type": "object", "required": ["id", "source", "target", "kind"], "properties": { "id": { "type": "string" }, "source": { "type": "string" }, "target": { "type": "string" }, "kind": { "type": "string" }, "label": { "type": "string" } } },
+    "FlowGraph": { "type": "object", "required": ["nodes", "edges", "output"], "properties": { "error": { "type": "string" }, "nodes": { "type": "array", "items": { "$ref": "#/$defs/FlowNode" } }, "edges": { "type": "array", "items": { "$ref": "#/$defs/FlowEdge" } }, "output": { "type": "string" } } },
+    "Diagnostic": { "type": "object", "required": ["message"], "properties": { "message": { "type": "string" }, "severity": { "enum": ["error", "warning", "info"] }, "from": { "type": "integer" }, "to": { "type": "integer" }, "line": { "type": "integer" } } },
+    "CompileView": {
+      "type": "object", "required": ["status"],
+      "properties": { "status": { "type": "string" }, "revision": { "type": "integer" }, "diagnostics": { "type": "array", "items": { "$ref": "#/$defs/Diagnostic" } }, "signals": { "type": "array", "items": { "$ref": "#/$defs/Signal" } }, "parameters": { "type": "array", "items": { "$ref": "#/$defs/Parameter" } }, "choices": { "type": "array", "items": { "$ref": "#/$defs/Choice" } }, "graph": { "$ref": "#/$defs/FlowGraph" }, "voiceLimit": { "type": "integer" }, "outputChannels": { "type": "integer" } }
+    },
+    "SampleAsset": { "type": "object", "required": ["path", "name", "duration", "channels", "sampleRate"], "properties": { "path": { "type": "string" }, "name": { "type": "string" }, "duration": { "type": "number" }, "channels": { "type": "integer" }, "sampleRate": { "type": "number" } } },
+    "WorkspaceFile": { "type": "object", "required": ["path"], "properties": { "path": { "type": "string" }, "name": { "type": "string" }, "kind": { "type": "string" } } },
+    "SequencerStep": { "type": "object", "required": ["active", "velocity", "gate"], "properties": { "active": { "type": "boolean" }, "velocity": { "type": "number" }, "gate": { "type": "number" } } },
+    "SequencerRow": { "type": "object", "required": ["note", "mute", "steps"], "properties": { "note": { "type": "integer" }, "mute": { "type": "boolean" }, "volume": { "type": "number" }, "steps": { "type": "array", "items": { "$ref": "#/$defs/SequencerStep" } } } },
+    "SequencerLeafSound": {
+      "oneOf": [
+        { "type": "object", "required": ["kind"], "properties": { "kind": { "const": "active" } } },
+        { "type": "object", "required": ["kind", "path"], "properties": { "kind": { "const": "instrument" }, "path": { "type": "string" } } },
+        { "type": "object", "required": ["kind", "path"], "properties": { "kind": { "const": "sample" }, "path": { "type": "string" }, "playback": { "enum": ["one_shot", "gated"] } } }
+      ]
+    },
+    "SequencerSound": {
+      "oneOf": [
+        { "$ref": "#/$defs/SequencerLeafSound" },
+        { "type": "object", "required": ["kind", "lanes"], "properties": { "kind": { "const": "lanes" }, "lanes": { "type": "array", "items": { "$ref": "#/$defs/SequencerLeafSound" } } } }
+      ]
+    },
+    "SequencerPattern": {
+      "type": "object", "required": ["length", "division", "swing", "direction", "root", "scale", "transpose", "rows"],
+      "properties": {
+        "metronome": { "type": "object", "required": ["mute", "division", "volume"], "properties": { "mute": { "type": "boolean" }, "division": { "type": "integer" }, "volume": { "type": "number" } } },
+        "sound": { "$ref": "#/$defs/SequencerSound" },
+        "length": { "enum": [16, 32] }, "division": { "enum": [4, 8, 16, 32] }, "swing": { "type": "number" },
+        "direction": { "enum": ["forward", "reverse", "pingpong", "random"] }, "root": { "type": "integer" },
+        "scale": { "enum": ["chromatic", "major", "minor", "pentatonic"] }, "transpose": { "type": "integer" },
+        "rows": { "type": "array", "items": { "$ref": "#/$defs/SequencerRow" } }
+      }
+    },
+    "SequencerState": {
+      "allOf": [{ "$ref": "#/$defs/SequencerPattern" }, { "type": "object", "required": ["revision", "playing"], "properties": {
+        "revision": { "type": "integer" }, "playing": { "type": "boolean" }, "playhead": { "type": "integer" }, "ownerDocumentId": { "type": "string" },
+        "soundStatus": { "enum": ["ready", "pending", "error"] }, "soundError": { "type": "string" } } }]
+    },
+    "ModelProfile": { "type": "object", "required": ["id", "name", "model", "endpoint", "hasKey"], "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "model": { "type": "string" }, "endpoint": { "type": "string" }, "hasKey": { "type": "boolean" } } },
+    "Preferences": {
+      "type": "object",
+      "properties": { "theme": { "type": "string" }, "opacity": { "type": "number" }, "split": { "type": "string" }, "fontFamily": { "type": "string" }, "fontSize": { "type": "number" }, "leftWidth": { "type": "number" }, "rightWidth": { "type": "number" }, "flowHeight": { "type": "number" }, "splitRatio": { "type": "number" }, "layoutVersion": { "type": "number" }, "showExplorer": { "type": "boolean" }, "showAssistant": { "type": "boolean" }, "showDataflow": { "type": "boolean" }, "showKeyboard": { "type": "boolean" }, "bpm": { "type": "number" } }
+    },
+    "PreferencesPatch": { "$ref": "#/$defs/Preferences" },
+    "Snapshot": {
+      "type": "object",
+      "required": ["sessionId", "document", "files", "compile", "audio", "ai"],
+      "properties": {
+        "protocol": { "type": "integer" },
+        "sessionId": { "type": "string" },
+        "workspaceId": { "type": "string" },
+        "capabilities": { "$ref": "#/$defs/Capabilities" },
+        "document": { "$ref": "#/$defs/Document" },
+        "documents": { "type": "array", "items": { "$ref": "#/$defs/OpenDocument" } },
+        "files": { "type": "array", "items": { "$ref": "#/$defs/WorkspaceFile" } },
+        "samples": { "type": "array", "items": { "$ref": "#/$defs/SampleAsset" } },
+        "compile": { "$ref": "#/$defs/CompileView" },
+        "observation": { "type": "object", "required": ["voice", "signals"], "properties": { "voice": { "type": "integer" }, "signals": { "type": "array", "items": { "type": "string" } }, "projection": { "$ref": "#/$defs/Projection" } } },
+        "sequencer": { "$ref": "#/$defs/SequencerState" },
+        "audio": {
+          "type": "object",
+          "properties": { "bpm": { "type": "number" }, "tempoSource": { "type": "string" }, "running": { "type": "boolean" }, "sampleRate": { "type": "number" }, "blockSize": { "type": "number" }, "voices": { "type": "number" }, "cpu": { "type": "number" }, "peak": { "type": "number" }, "programRevision": { "type": "number" }, "demoRunning": { "type": "boolean" }, "audition": { "type": ["string", "null"] } }
+        },
+        "ai": {
+          "type": "object",
+          "properties": { "profiles": { "type": "array", "items": { "$ref": "#/$defs/ModelProfile" } }, "selectedId": { "type": "string" }, "settingsError": { "type": "string" }, "configured": { "type": "boolean" }, "model": { "type": "string" }, "endpoint": { "type": "string" }, "busy": { "type": "boolean" }, "runningConversationId": { "type": "string" }, "runningRequestId": { "type": "string" }, "activeConversationId": { "type": "string" }, "historyError": { "type": "string" } }
+        },
+        "preferences": { "$ref": "#/$defs/Preferences" },
+        "exportedParameters": { "type": "array", "items": { "type": "object", "required": ["slot", "bindingId", "name", "bound"], "properties": { "slot": { "type": "integer" }, "bindingId": { "type": "string" }, "name": { "type": "string" }, "bound": { "type": "boolean" }, "value": { "type": "number" } } } }
+      }
+    },
+    "ImportResult": { "allOf": [{ "$ref": "#/$defs/Snapshot" }, { "type": "object", "properties": { "importedPath": { "type": "string" }, "sampleImportedPath": { "type": "string" } } }] },
+    "StateEvent": {
+      "type": "object", "required": ["protocol", "full", "slices"],
+      "description": "Top-level Snapshot keys whose value changed. full=true carries every key. A null slice was removed.",
+      "properties": { "protocol": { "type": "integer" }, "full": { "type": "boolean" }, "slices": { "type": "object" } }
+    },
+    "TelemetrySignal": {
+      "type": "object", "required": ["name"],
+      "properties": {
+        "spectrumPeak": { "type": "boolean" }, "signedSpectrum": { "type": "boolean" }, "detail": { "type": "array", "items": { "type": "number" } }, "detailSeconds": { "type": "number" },
+        "beatAvailable": { "type": "boolean" }, "beatPhase": { "type": "number" }, "beatMin": { "type": "array", "items": { "type": "number" } }, "beatMax": { "type": "array", "items": { "type": "number" } }, "beatAge": { "type": "array", "items": { "type": "number" } },
+        "held": { "type": "boolean" }, "spectrumHeld": { "type": "boolean" }, "waiting": { "type": "string" }, "sampleCount": { "type": "number" }, "windowReady": { "type": "boolean" },
+        "name": { "type": "string" }, "kind": { "type": "string" }, "captureKind": { "type": "string" }, "shape": { "type": "string" }, "unit": { "type": "string" },
+        "values": { "type": "array", "items": { "type": "number" } }, "scalar": { "type": "number" }, "value": { "type": "number" }, "valid": { "type": "boolean" }, "error": { "type": "string" },
+        "rms": { "type": "number" }, "peak": { "type": "number" }, "spectrum": { "type": "array", "items": { "type": "number" } }, "frequencies": { "type": "array", "items": { "type": "number" } }, "spectrumFrequencies": { "type": "array", "items": { "type": "number" } }
+      }
+    },
+    "Telemetry": {
+      "type": "object", "required": ["sequence", "signals"],
+      "properties": {
+        "captureIdle": { "type": "boolean" }, "captureMode": { "enum": ["key", "performance", "transport"] }, "captureHeld": { "type": "boolean" }, "keyEpoch": { "type": "number" },
+        "sequencerStep": { "type": "number" }, "sequencerPlaying": { "type": "boolean" }, "sequencerDocumentId": { "type": "string" }, "captureProjection": { "$ref": "#/$defs/Projection" },
+        "frozen": { "type": "boolean" }, "status": { "type": "string" }, "error": { "type": "string" }, "captureVoice": { "type": "number" }, "generation": { "type": "number" },
+        "parameterEpoch": { "type": "number" }, "observationEpoch": { "type": "number" }, "captureStart": { "type": "number" }, "captureEnd": { "type": "number" }, "captureResets": { "type": "number" },
+        "analysisReady": { "type": "boolean" }, "sequence": { "type": "number" }, "programRevision": { "type": "number" }, "sampleRate": { "type": "number" },
+        "signals": { "type": "array", "items": { "$ref": "#/$defs/TelemetrySignal" } }, "outputPeak": { "type": "number" }, "voices": { "type": "number" }, "cpu": { "type": "number" }, "gap": { "type": "boolean" },
+        "captureDrops": { "type": "number" }, "processErrors": { "type": "number" }, "hostOverflows": { "type": "number" }
+      }
+    },
+    "AgentActivity": { "type": "object", "required": ["id", "kind", "label", "state"], "properties": { "id": { "type": "string" }, "kind": { "enum": ["thinking", "tool"] }, "label": { "type": "string" }, "detail": { "type": "string" }, "state": { "enum": ["running", "done", "failed", "cancelled"] }, "durationMs": { "type": "number" } } },
+    "AgentEvent": {
+      "type": "object", "required": ["requestId"],
+      "properties": { "activity": { "$ref": "#/$defs/AgentActivity" }, "requestId": { "type": "string" }, "conversationId": { "type": "string" }, "documentId": { "type": "string" }, "status": { "type": "string" }, "delta": { "type": "string" }, "text": { "type": "string" }, "proposedSource": { "type": "string" }, "proposalAvailable": { "type": "boolean" }, "baseRevision": { "type": "number" }, "error": { "type": "string" } }
+    },
+    "AssistantMessage": {
+      "type": "object", "required": ["id", "prompt", "text", "status", "baseRevision", "documentId"],
+      "properties": { "activity": { "type": "array", "items": { "$ref": "#/$defs/AgentActivity" } }, "startedAt": { "type": "number" }, "finishedAt": { "type": "number" }, "id": { "type": "string" }, "prompt": { "type": "string" }, "text": { "type": "string" }, "status": { "type": "string" }, "baseRevision": { "type": "number" }, "documentId": { "type": "string" }, "documentPath": { "type": "string" }, "proposedSource": { "type": "string" }, "proposalAvailable": { "type": "boolean" } }
+    },
+    "ConversationSummary": { "type": "object", "required": ["id", "title", "archived", "deleted", "updatedAt", "messageCount"], "properties": { "id": { "type": "string" }, "title": { "type": "string" }, "archived": { "type": "boolean" }, "deleted": { "type": "boolean" }, "updatedAt": { "type": "number" }, "messageCount": { "type": "number" } } },
+    "Conversation": { "allOf": [{ "$ref": "#/$defs/ConversationSummary" }, { "type": "object", "required": ["messages"], "properties": { "messages": { "type": "array", "items": { "$ref": "#/$defs/AssistantMessage" } } } }] },
+    "HistoryView": {
+      "type": "object", "required": ["conversations", "activeConversationId", "conversation"],
+      "properties": { "conversations": { "type": "array", "items": { "$ref": "#/$defs/ConversationSummary" } }, "activeConversationId": { "type": "string" }, "conversation": { "oneOf": [{ "$ref": "#/$defs/Conversation" }, { "type": "null" }] }, "runningConversationId": { "type": "string" }, "runningRequestId": { "type": "string" }, "historyError": { "type": "string" } }
+    },
+    "MidiInput": { "type": "object", "required": ["id", "name", "enabled", "connected"], "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "manufacturer": { "type": "string" }, "enabled": { "type": "boolean" }, "connected": { "type": "boolean" } } },
+    "AudioDevices": {
+      "type": "object", "required": ["audio", "midi"],
+      "properties": {
+        "audio": { "type": "object", "required": ["state", "sampleRate"], "properties": { "state": { "enum": ["off", "starting", "running", "suspended", "unsupported", "failed"] }, "sampleRate": { "type": "number" }, "baseLatency": { "type": "number" }, "outputLatency": { "type": "number" }, "error": { "type": "string" } } },
+        "midi": { "type": "object", "required": ["state", "inputs"], "properties": { "state": { "enum": ["unsupported", "prompt", "granted", "denied"] }, "inputs": { "type": "array", "items": { "$ref": "#/$defs/MidiInput" } }, "error": { "type": "string" } } }
+      }
+    }
+  }
+}

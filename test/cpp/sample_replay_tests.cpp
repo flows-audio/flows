@@ -1,4 +1,4 @@
-#include "host/app/RealtimeSession.hpp"
+#include "app/RealtimeSession.hpp"
 
 #include <algorithm>
 #include <array>

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AgentEvent, Snapshot } from './types';
-import { request, subscribe } from './native';
+import { request, subscribe } from './client';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
 import { AssistantMessage, emptyHistory, HistoryFolder, HistoryView, historyRows, isTerminal, mergeAgentEvent, mergeLoadedMessages } from './assistantHistory';
@@ -105,7 +105,7 @@ export function Agent({ snapshot, connected, flush, onResult, onError }: { snaps
       localPhase.current = 'sent';
       const acknowledgement = await request('ai.send', { requestId, conversationId, prompt: text, referencePath: reference });
       // Completion may already have arrived by this point.
-      const merged = mergeAgentEvent(cache.current.get(conversationId) || [], { requestId, conversationId, ...acknowledgement });
+      const merged = mergeAgentEvent(cache.current.get(conversationId) || [], acknowledgement);
       cache.current.set(conversationId, merged);
       const latest = historyRef.current;
       if (latest.conversation?.id === conversationId) commit({ ...latest, conversation: { ...latest.conversation, messages: merged } });
