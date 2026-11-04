@@ -28,6 +28,7 @@ void AppCore::worker(std::stop_token stop) {
     auto nextCheckpoint = nextTelemetry;
     std::string lastRecoveryPrefix;
     std::shared_ptr<const std::string> lastRecoveryAssets;
+    auto lastRecoveryWrite = std::chrono::steady_clock::time_point{};
     auto& session = runtime_.session;
     auto& sequenceSession = runtime_.sequenceSession;
     while (!stop.stop_requested()) {
@@ -409,8 +410,14 @@ void AppCore::worker(std::stop_token stop) {
                     // Neither JSON serialization nor disk I/O holds the UI lock.
                     auto assets = sampleAssets_.serializedBundle(sources);
                     auto prefix = recoveryPrefix(recovery);
-                    if (prefix != lastRecoveryPrefix || assets != lastRecoveryAssets) {
+                    // Each rewrite copies the whole sample bundle (and the browser
+                    // saves it to IndexedDB again), so with more than 1 MiB of
+                    // samples, source edits are written at most every five seconds.
+                    const bool large = assets->size() > 1024 * 1024;
+                    const bool due = !large || now - lastRecoveryWrite >= std::chrono::seconds(5);
+                    if (assets != lastRecoveryAssets || (prefix != lastRecoveryPrefix && due)) {
                         writeRecovery(prefix, *assets);
+                        lastRecoveryWrite = now;
                         lastRecoveryPrefix = std::move(prefix);
                         lastRecoveryAssets = std::move(assets);
                     }

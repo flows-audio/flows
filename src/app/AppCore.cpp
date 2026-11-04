@@ -324,18 +324,36 @@ void AppCore::configureWorkspace() {
         document_.text = text::decodeText(*bytes);
     document_.savedText = document_.text;
     documentOrder_.push_back(document_.path);
-    if (options_.standalone) try {
-            const auto recoveryFile = workspace_ / ".session.flowsinst";
-            if (files::isFile(recoveryFile) && files::size(recoveryFile) <= static_cast<std::int64_t>(maximumRecoveryBytes)) {
-                const auto recovery =
-                    json::parseBounded(files::read(recoveryFile, maximumRecoveryBytes), maximumRecoveryBytes);
-                if (json::str(recovery, "format") == "flows.workspace")
-                    loadRecoveryLocked(recovery);
-                else
-                    loadPackageLocked(recovery);
-            }
-        } catch (...) { /* Keep the bundled instrument if recovery is corrupt. */
+    if (const auto recoveryFile = workspace_ / ".session.flowsinst"; options_.standalone && files::isFile(recoveryFile)) {
+        std::string problem;
+        try {
+            if (files::size(recoveryFile) > static_cast<std::int64_t>(maximumRecoveryBytes))
+                throw std::runtime_error("the file is larger than the recovery limit");
+            // The app wrote this file; drafts of many documents need more
+            // separators than the default limits allow (as organizeWorkspace).
+            json::ParseLimits limits;
+            limits.maxBytes = maximumRecoveryBytes;
+            limits.maxSeparators = limits.maxSeparatorsPerContainer = 64u * 1024 * 1024;
+            const auto recovery = json::parse(files::read(recoveryFile, maximumRecoveryBytes), limits);
+            if (json::str(recovery, "format") == "flows.workspace")
+                loadRecoveryLocked(recovery);
+            else
+                loadPackageLocked(recovery);
+        } catch (const std::exception& error) {
+            problem = error.what();
+        } catch (...) {
+            problem = "unknown error";
         }
+        // Keep the bundled instrument, and move the drafts out of the next
+        // checkpoint's way so they can still be recovered by hand.
+        if (!problem.empty()) {
+            const auto kept = workspace_ / ".session.unreadable.flowsinst";
+            emitLocked(json::object(
+                {{"status", "failed"},
+                 {"error", "Unsaved work from the last session could not be restored (" + problem + ")." +
+                               (files::move(recoveryFile, kept) ? " It was kept as .session.unreadable.flowsinst." : "")}}));
+        }
+    }
     runtime_.bpm.store(preferences_["bpm"].asDouble());
     samples_ = sampleAssets_.catalogue();
     refreshFilesLocked();
