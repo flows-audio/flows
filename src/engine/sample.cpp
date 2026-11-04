@@ -184,9 +184,21 @@ bool inside(const std::filesystem::path& child, const std::filesystem::path& roo
 }
 } // namespace
 
-std::shared_ptr<const SampleData> load_sample_file(const std::filesystem::path& path, SampleLimits limits) {
+namespace {
+Format parse_format(Bytes bytes) {
+    require(bytes.size() >= 12, "Sample file is empty or truncated");
+    return tag(bytes, 0, "RIFF") ? wave(bytes) : aiff(bytes);
+}
+void check_limits(const SampleLimits& limits) {
     require(limits.max_file_bytes >= 12 && limits.max_decoded_bytes >= sizeof(float) &&
             std::isfinite(limits.max_seconds) && limits.max_seconds > 0, "Invalid sample loading limits");
+}
+void check_format(const Format& format, const SampleLimits& limits) {
+    require(std::isfinite(format.rate) && format.rate >= 100 && format.rate <= 768000, "Sample rate must be between 100 and 768000 Hz");
+    require(format.frames > 0 && format.frames <= limits.max_decoded_bytes / (format.channels * sizeof(float)) &&
+            double(format.frames) / format.rate <= limits.max_seconds, "Decoded sample is empty or exceeds the memory/duration limit");
+}
+std::vector<unsigned char> read_sample_file(const std::filesystem::path& path, const SampleLimits& limits) {
     std::error_code error;
     require(std::filesystem::is_regular_file(path, error) && !error, "Sample is not a regular file");
     const auto length = std::filesystem::file_size(path, error);
@@ -195,11 +207,29 @@ std::shared_ptr<const SampleData> load_sample_file(const std::filesystem::path& 
     std::vector<unsigned char> storage(static_cast<std::size_t>(length));
     std::ifstream file(path, std::ios::binary);
     require(bool(file) && bool(file.read(reinterpret_cast<char*>(storage.data()), static_cast<std::streamsize>(length))), "Could not read the complete sample file");
-    const Bytes bytes(storage);
-    const auto format = tag(bytes, 0, "RIFF") ? wave(bytes) : aiff(bytes);
-    require(std::isfinite(format.rate) && format.rate >= 100 && format.rate <= 768000, "Sample rate must be between 100 and 768000 Hz");
-    require(format.frames > 0 && format.frames <= limits.max_decoded_bytes / (format.channels * sizeof(float)) &&
-            double(format.frames) / format.rate <= limits.max_seconds, "Decoded sample is empty or exceeds the memory/duration limit");
+    return storage;
+}
+} // namespace
+
+SampleInfo probe_sample(std::span<const unsigned char> bytes, SampleLimits limits) {
+    check_limits(limits);
+    require(bytes.size() <= limits.max_file_bytes, "Sample file exceeds the size limit");
+    const auto format = parse_format(bytes);
+    check_format(format, limits);
+    return {format.rate, format.channels, format.frames};
+}
+
+SampleInfo probe_sample_file(const std::filesystem::path& path, SampleLimits limits) {
+    check_limits(limits);
+    const auto storage = read_sample_file(path, limits);
+    return probe_sample(storage, limits);
+}
+
+std::shared_ptr<const SampleData> load_sample_bytes(std::span<const unsigned char> bytes, SampleLimits limits) {
+    check_limits(limits);
+    require(bytes.size() >= 12 && bytes.size() <= limits.max_file_bytes, "Sample file is empty, truncated or exceeds the size limit");
+    const auto format = parse_format(bytes);
+    check_format(format, limits);
     auto decoded = std::make_shared<SampleData>();
     decoded->sample_rate = format.rate; decoded->left.resize(format.frames);
     if (format.channels == 2) decoded->right.resize(format.frames);
@@ -210,6 +240,12 @@ std::shared_ptr<const SampleData> load_sample_file(const std::filesystem::path& 
     }
     decoded->content_key = sample_key(*decoded);
     return decoded;
+}
+
+std::shared_ptr<const SampleData> load_sample_file(const std::filesystem::path& path, SampleLimits limits) {
+    check_limits(limits);
+    const auto storage = read_sample_file(path, limits);
+    return load_sample_bytes(storage, limits);
 }
 
 SampleBank load_sample_bank(const Program& program, const std::filesystem::path& asset_root, SampleLimits limits) {

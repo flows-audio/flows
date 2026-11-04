@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -28,11 +29,25 @@ struct SampleLimits {
     double max_seconds = 600.0;
 };
 
+// Header facts used to list samples without decoding their audio.
+struct SampleInfo {
+    double sample_rate = 0;
+    unsigned channels = 0;
+    std::size_t frames = 0;
+};
+
 // WAV PCM / IEEE float and AIFF / AIFC PCM / IEEE float; one or two channels.
 // Throws std::runtime_error for unreadable, unsupported or malformed resources.
 // Never call these loading functions from the audio callback.
 std::shared_ptr<const SampleData> load_sample_file(const std::filesystem::path& path,
                                                   SampleLimits limits = {});
+// Decodes the same formats from memory, for hosts without a native file system
+// path (browser uploads, embedded packages).
+std::shared_ptr<const SampleData> load_sample_bytes(std::span<const unsigned char> bytes,
+                                                   SampleLimits limits = {});
+// Validates a sample's container and limits without decoding its audio.
+SampleInfo probe_sample(std::span<const unsigned char> bytes, SampleLimits limits = {});
+SampleInfo probe_sample_file(const std::filesystem::path& path, SampleLimits limits = {});
 // Paths resolve against asset_root, or beside the source file when no root is
 // supplied. Dot components and targets escaping that root are rejected.
 SampleBank load_sample_bank(const Program& program,
