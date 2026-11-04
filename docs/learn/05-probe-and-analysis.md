@@ -2,7 +2,7 @@
 
 The purpose of a probe is to make a signal inspectable without constructing a second version of the instrument. The engine calculates a value once; the observation path copies that value before its storage is reused.
 
-The main files are [RealtimeSession.hpp](../../src/host/app/RealtimeSession.hpp#L30), [Analyzer.hpp](../../src/host/app/Analyzer.hpp#L12), and [Analyzer.cpp](../../src/host/app/Analyzer.cpp#L15).
+The main files are [RealtimeSession.hpp](../../src/app/RealtimeSession.hpp#L30), [Analyzer.hpp](../../src/app/Analyzer.hpp#L12), and [Analyzer.cpp](../../src/app/Analyzer.cpp#L15).
 
 ## Two graphs, with a one-way connection
 
@@ -23,7 +23,7 @@ A named DSP signal can already have a capsule and be inspected without an explic
 
 ## Subscribe to inputs, not to every view
 
-[`makeProbeSelection`](../../src/host/app/Analyzer.cpp#L170) walks selected analysis views back to their DSP roots. Two views depending on the same root share a capture channel. `spec(p)`, `power(p)`, and `p` consume one root, not three.
+[`makeProbeSelection`](../../src/app/Analyzer.cpp#L200) walks selected analysis views back to their DSP roots. Two views depending on the same root share a capture channel. `spec(p)`, `power(p)`, and `p` consume one root, not three.
 
 Current budgets are eight distinct roots, 128 analysis dependencies per view, 512 nodes across the selected views, and 32 spectral-transform nodes. The UI plans a selection within these limits; the host independently validates it. Unselected analysis does not consume capture channels. The Analyzer API can default to the first four authored views, but the application passes an explicit current selection.
 
@@ -31,7 +31,7 @@ Current budgets are eight distinct roots, 128 analysis dependencies per view, 51
 
 ## What arrives in a capture frame
 
-[`CaptureFrame`](../../src/host/app/RealtimeSession.hpp#L42) records:
+[`CaptureFrame`](../../src/app/RealtimeSession.hpp#L43) records:
 
 - Source revision, engine generation, and parameter/observation epochs.
 - Absolute sample interval, sample rate, and sequence number.
@@ -42,7 +42,7 @@ The audio callback writes into a 128-frame queue. The worker reads it. If the qu
 
 ## Stereo and poly need an explicit interpretation
 
-[`capture_stereo`](../../src/host/app/RealtimeSession.cpp#L368) projects audio into one chosen analysis channel: Mid `(L+R)/2`, Left, Right, or Side `(L−R)/2`. In mixed-voice mode, these audio values are summed across voices. Analysis of `power(probe(audio))` therefore measures the power of that projected sum, including interference between voices. It is not the sum of separate per-voice powers.
+[`capture_stereo`](../../src/app/RealtimeSession.cpp#L386) projects audio into one chosen analysis channel: Mid `(L+R)/2`, Left, Right, or Side `(L−R)/2`. In mixed-voice mode, these audio values are summed across voices. Analysis of `power(probe(audio))` therefore measures the power of that projected sum, including interference between voices. It is not the sum of separate per-voice powers.
 
 Mono control signals such as gate and envelope keep their original values even when audio projection is Side. Adding all gates or envelopes would not describe one voice's behavior. The mixed control preview uses the last rendered voice's value and labels it `last_voice_control`. This is a rendering selection, not a guarantee that it belongs to the newest key press.
 
@@ -50,7 +50,7 @@ For arithmetic or transforms involving a poly control probe, choose a specific v
 
 ## A continuous window is evidence, not decoration
 
-[`Analyzer::Impl::consume`](../../src/host/app/Analyzer.cpp#L211) maintains a circular history of 4096 samples per root. At 48 kHz this is about 85.3 ms; at 44.1 kHz it is about 92.9 ms. This is the analysis-window length, not total input-to-display latency.
+[`Analyzer::Impl::consume`](../../src/app/Analyzer.cpp#L292) maintains a circular history of 4096 samples per root. At 48 kHz this is about 85.3 ms; at 44.1 kHz it is about 92.9 ms. This is the analysis-window length, not total input-to-display latency.
 
 History resets after a missing packet, sample gap, source/engine change, parameter epoch, observation change, selected-voice replacement, or transition frame. Invalid/nonfinite captures are rejected. A mixed-control voice change resets that control channel without discarding independent mixed-audio history.
 
@@ -60,7 +60,7 @@ This explains a practical demo behavior: a held note gives a stable spectral win
 
 ## Waveform, RMS, peak, and display reduction
 
-[`display`](../../src/host/app/Analyzer.cpp#L134) calculates RMS and peak from the currently available waveform samples:
+[`display`](../../src/app/Analyzer.cpp#L134) calculates RMS and peak from the currently available waveform samples:
 
 ```text
 mean square = Σ x[n]² / N
@@ -78,14 +78,14 @@ The standalone `power(p)` analysis operator uses the complete 4096-sample window
 
 ## FFT: what the spectrum numbers mean
 
-[`fft`](../../src/host/app/Analyzer.cpp#L95) is an iterative radix-2 FFT: bit-reorder the 4096 values, then combine pairs in stages of size 2, 4, 8, and so on. Before transforming, it applies the symmetric Hann window:
+[`fft`](../../src/app/Analyzer.cpp#L104) is an iterative radix-2 FFT: bit-reorder the 4096 values, then combine pairs in stages of size 2, 4, 8, and so on. Before transforming, it applies the symmetric Hann window:
 
 ```text
 w[n] = 0.5 − 0.5 cos(2πn/(N−1)),   N = 4096
 X    = FFT(x × w)
 ```
 
-Windowing reduces leakage caused by the window's endpoints. It also changes magnitude, so [`snapshot`](../../src/host/app/Analyzer.cpp#L308) normalizes the result. `spec`/`spectrum` returns a one-sided **linear amplitude spectrum**:
+Windowing reduces leakage caused by the window's endpoints. It also changes magnitude, so [`snapshot`](../../src/app/Analyzer.cpp#L308) normalizes the result. `spec`/`spectrum` returns a one-sided **linear amplitude spectrum**:
 
 ```text
 A[k] = |X[k]| × factor / ((N−1)/2)
@@ -99,7 +99,7 @@ Direct `probe(audio)` views reuse their captured root's preview spectrum. Select
 
 ## Mel spectrum: a different question
 
-[`mel_spectrum`](../../src/host/app/Analyzer.cpp#L313) divides frequency into 64 triangular bands. Band edges are equally spaced on the mel scale:
+[`mel_spectrum`](../../src/app/Analyzer.cpp#L313) divides frequency into 64 triangular bands. Band edges are equally spaced on the mel scale:
 
 ```text
 mel(f) = 2595 log10(1 + f/700)
@@ -121,11 +121,11 @@ The current compiler preserves the input `Unit` label on `power` and `mel_spec`;
 
 These are not interchangeable. In particular, `power(p_a - p_b)` also includes the correlation between the two waveforms and is generally different from `power(p_a) - power(p_b)`. Likewise, a magnitude-spectrum difference is not the spectrum of a waveform difference.
 
-The [analysis evaluator](../../src/host/app/Analyzer.cpp#L330) checks matching window shapes and frequency axes. Scalars can broadcast. Divide-by-zero and nonfinite results report errors instead of displaying a plausible-looking number. Source-level unit rules still apply before evaluation.
+The [analysis evaluator](../../src/app/Analyzer.cpp#L330) checks matching window shapes and frequency axes. Scalars can broadcast. Divide-by-zero and nonfinite results report errors instead of displaying a plausible-looking number. Source-level unit rules still apply before evaluation.
 
 ## Listen and Hold have narrow meanings
 
-Listen switches monitoring from the final instrument to a named audio signal, or its direct audio probe, with a 10 ms transition. The signal can be mixed across voices or selected by slot. It retains the actual left/right channels: choosing Side for a chart does **not** make Listen audition Side. Derived analysis and control values cannot be auditioned through this path. See [audition mixing](../../src/host/app/RealtimeSession.cpp#L330).
+Listen switches monitoring from the final instrument to a named audio signal, or its direct audio probe, with a 10 ms transition. The signal can be mixed across voices or selected by slot. It retains the actual left/right channels: choosing Side for a chart does **not** make Listen audition Side. Derived analysis and control values cannot be auditioned through this path. See [audition mixing](../../src/app/RealtimeSession.cpp#L330).
 
 [`Observation`](../../ui/src/observation.ts#L1) can retain a valid display while new data is pending. The UI labels held data; it does not feed that old display back into analysis. User Hold freezes the measured display, not the sound engine. These distinctions prevent a stable-looking old chart from being mistaken for a new measurement.
 

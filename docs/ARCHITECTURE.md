@@ -9,8 +9,9 @@ Source describes an event-driven signal flow; the runtime handles buffers and sa
 | Compiler | `src/compiler`: lexer/parser, typed mono/stereo graph, source spans, parameter/choice metadata, voice completion, analysis graph |
 | Engine | `src/engine`: ordered C++ DSP kernels, including unison, LFO, and ADAA distortion; shared by offline, standalone, and plugin paths; independent of JUCE |
 | Session | `RealtimeSession`: bounded queues, parameter updates, program replacement, held-note replay, capture and audition; a bounded bank serves independently selected sequencer lane sounds |
-| Host | JUCE 8.0.7 device/MIDI/AU/VST3 integration; `FlowsProcessor` owns documents, workspace, macros, and background work |
-| Editor | One WebView per native editor, with React layout, CodeMirror text views, and canvas observations |
+| App core | `src/app`: `AppCore` owns documents, undo, workspace, compilation, macros, sequencer, packages, recovery and assistant tools; `AudioRuntime` is the realtime callback. Portable C++20, no JUCE |
+| Hosts | `src/host/app`: JUCE 8.0.7 device/MIDI/AU/VST3 adapter, Keychain and dialogs. `src/web`: the same core compiled to WebAssembly, with a browser audio worklet, IndexedDB storage and Web MIDI |
+| Editor | One React editor for every host: a WebView in the native app, the page itself in the browser; CodeMirror text views and canvas observations |
 | Analysis | Non-realtime worker calculates waveform, FFT, mel, power, and arithmetic from continuous capture |
 | AI | Separate network worker uses bounded tools to search/read workspace instruments, compile, render, compare, and propose edits |
 
@@ -27,6 +28,27 @@ flowchart LR
     B --> W[Analysis worker]
     W --> U
 ```
+
+## Hosts and protocol
+
+```mermaid
+flowchart TB
+    UI[React editor<br/>ui/src] -->|request / events| CL[FlowsClient<br/>ui/src/client.ts]
+    CL -->|JUCE WebView bridge| JH[JUCE host<br/>src/host/app]
+    CL -->|WebAssembly calls| WH[Browser host<br/>src/web + ui/src/web]
+    JH --> CORE[AppCore + AudioRuntime<br/>src/app]
+    WH --> CORE
+    CORE --> SES[RealtimeSession · Analyzer]
+    SES --> ENG[Compiler · Engine<br/>src/compiler · src/engine]
+```
+
+Every host runs the same `AppCore`. A host supplies small ports: macro parameters (DAW automation or memory), HTTP for the assistant, a secret store, an optional audio decoder, bundled examples, and the workspace directory. Files go through `std::filesystem`; the browser mounts IndexedDB-backed storage at that path. `AudioRuntime::process` receives plain buffers, raw MIDI bytes and an optional host musical position, so JUCE's `processBlock` and the browser's Wasm audio worklet call identical realtime code. Both sides share the existing lock-free queues and mailboxes.
+
+[`protocol/flows-protocol.json`](../protocol/flows-protocol.json) defines every UI request, its owner (core, every host, or the browser host only), parameters, result and the events. The UI's types are generated from it. Snapshots carry the protocol version and `capabilities`: what the host can do (native or in-app audio settings, MIDI source, storage, secret store, file dialogs, Live bridge). UI features branch on capabilities, never on which host is running. `flowsState` events carry only the top-level snapshot slices that changed since the previous event.
+
+The scripted conformance session runs against the native and WebAssembly cores and must produce identical responses; render parity compares the two builds' audio. See [Web](WEB.md) for the browser host.
+
+## Native wrappers
 
 macOS standalone, AU, and VST3 are implemented. Wrapper adapters check pinned JUCE source hashes and generate copies in the build directory. They preserve VST3 parameter points and AU immediate/ramp schedules without editing the user's JUCE checkout. Plugin code uses hidden visibility, exporting only factory/entry symbols to avoid merging internal symbols with a JUCE host.
 
@@ -124,11 +146,11 @@ DAW save reads a prebuilt immutable package plus a bounded runtime parameter ove
 
 `AssistantHistory` keeps workspace-local conversations in `.assistant-history.json`. It merges under an inter-process file lock and saves through a temporary file. Conversations can be renamed, archived, moved to Trash, restored or permanently removed from Trash. Request IDs route replies to their original conversation. Interrupted requests recover with an explicit status. History is separate from instrument/DAW packages and contains no connection credentials.
 
-The frontend renders replies through React Markdown with GFM support. Raw HTML stays disabled. Code copying and explicit web-link opening use small native editor actions. Historical proposals are readable, but application still requires an in-memory validated proposal for the current document revision.
+The frontend renders replies through React Markdown with GFM support. Raw HTML stays disabled. Code copying and explicit web-link opening use small host actions (native in the app, browser APIs on the web). Historical proposals are readable, but application still requires an in-memory validated proposal for the current document revision.
 
 AI tools are `search_instruments`, `read_source`, `explain_signal_path`, `compile_snapshot`, `render_case`, `compare_observations`, and `propose_source_patch`. The model receives the user's prompt, bounded recent conversation turns, an optional source reference, and tool results. Search and read are limited to visible `.flows` files within the workspace; open drafts take precedence. Each search page scans at most 128 instruments / roughly 8 MiB and returns up to 40 matches plus a continuation cursor. There are no shell or browser tools. Proposals compile before review. Existing-file proposals identify their target and the digest returned by its read; applying them checks that target's source, even if editor focus changed. Stale proposals cannot overwrite newer edits.
 
-Networking runs on a separate worker with timeouts, cancellation, and response/tool budgets. Endpoints allow HTTPS or strict loopback HTTP. `AIModels` saves endpoint/model profiles and the selected profile in `~/Library/Flows/ai-models.json`, shared across workspaces and app/plugin instances. Credentials are referenced by ID and stored separately in macOS Keychain. Atomic replacement and an inter-process lock protect settings; changing the endpoint clears its old credential. A running request retains its captured connection. Keys are excluded from instrument packages, history and model context. Offline AI rendering is limited to three seconds, 256 nodes, 32 states, eight voices, and eight observations. Tools return measured metrics, not claims of listening.
+Networking runs on a separate worker with timeouts, cancellation, and response/tool budgets; the host's HTTP port performs the request (JUCE on macOS, the page's `fetch()` in the browser while the worker waits). Endpoints allow HTTPS or strict loopback HTTP. `AIModels` saves endpoint/model profiles and the selected profile in `~/Library/Flows/ai-models.json` on macOS (browser storage on the web), shared across workspaces and app/plugin instances. Credentials are referenced by ID and stored separately in the host's secret store: macOS Keychain, or memory for the current browser tab only. Atomic replacement and an inter-process lock protect settings; changing the endpoint clears its old credential. A running request retains its captured connection. Keys are excluded from instrument packages, history and model context. Offline AI rendering is limited to three seconds, 256 nodes, 32 states, eight voices, and eight observations. Tools return measured metrics, not claims of listening.
 
 Validation separates language semantics, native/plugin integration, GUI behavior, listening, and performance. A local fake endpoint covers actual HTTP/tool/proposal behavior; a live model provider remains separate verification. The recorded Release engine benchmark at revision `10769fa` passed 67/72 budget groups with 40 deadline misses, although all p99 values met budget. Four reruns of only the worst group had no misses; the cause of the full-run misses remains unresolved. Performance acceptance is incomplete, and that report does not certify later binaries. It excludes the full device callback, GUI, Analyzer, and hot-swap. See [Validation](../test/README.md) for exact evidence and reproduction commands.
 

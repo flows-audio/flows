@@ -31,13 +31,15 @@ The source contains no buffer size. The host can ask for one sample or a block w
 | --- | --- | --- |
 | [program.hpp](../../src/compiler/program.hpp), [program.cpp](../../src/compiler/program.cpp) | Turn text into a checked `Program` | `Program`, `compile`, `Parser` |
 | [engine.hpp](../../src/engine/engine.hpp), [engine.cpp](../../src/engine/engine.cpp) | Execute nodes and maintain voice state | `Engine`, its preparation and rendering methods |
-| [RealtimeSession.hpp](../../src/host/app/RealtimeSession.hpp), [RealtimeSession.cpp](../../src/host/app/RealtimeSession.cpp) | Transfer events, parameters, prepared programs and capture data across the audio boundary | `RealtimeSession` |
-| [FlowsProcessor.cpp](../../src/host/app/FlowsProcessor.cpp) | Own documents and background work, adapt JUCE audio/MIDI, publish UI state | `processBlock`, `request`, `snapshot` |
-| [Analyzer.cpp](../../src/host/app/Analyzer.cpp) | Analyze captured samples away from the audio callback | `Analyzer` |
-| [FlowsEditor.cpp](../../src/host/app/FlowsEditor.cpp), [native.ts](../../ui/src/native.ts) | Connect the embedded web UI to native requests and events | `flowsRequest`, `flowsState`, `flowsTelemetry` |
+| [RealtimeSession.hpp](../../src/app/RealtimeSession.hpp), [RealtimeSession.cpp](../../src/app/RealtimeSession.cpp) | Transfer events, parameters, prepared programs and capture data across the audio boundary | `RealtimeSession` |
+| [AppCore.cpp](../../src/app/AppCore.cpp), [AppCoreWorker.cpp](../../src/app/AppCoreWorker.cpp) | Own documents and background work, publish UI state | `request`, `snapshot`, `worker` |
+| [AudioRuntime.cpp](../../src/app/AudioRuntime.cpp), [FlowsProcessor.cpp](../../src/host/app/FlowsProcessor.cpp) | Run the audio callback; adapt JUCE audio, MIDI and automation | `AudioRuntime::process`, `processBlock` |
+| [Analyzer.cpp](../../src/app/Analyzer.cpp) | Analyze captured samples away from the audio callback | `Analyzer` |
+| [flows-protocol.json](../../protocol/flows-protocol.json), [client.ts](../../ui/src/client.ts) | Define and carry every request, event and host capability | `methods`, `request`, `subscribe` |
+| [FlowsEditor.cpp](../../src/host/app/FlowsEditor.cpp#L33), [WebHost.cpp](../../src/web/WebHost.cpp) | Connect the editor to the core: the native WebView bridge, or WebAssembly in the browser | `flowsRequest`, `flows_request`, `flowsState` |
 | [App.tsx](../../ui/src/App.tsx), [Editor.tsx](../../ui/src/Editor.tsx) | Arrange the workspace and edit instrument text | document activation, editor transactions |
 | [Dataflow.tsx](../../ui/src/Dataflow.tsx), [Signals.tsx](../../ui/src/Signals.tsx) | Display graph nodes and measured signals | node selection, Inspector, canvas drawing |
-| [AIService.cpp](../../src/host/app/AIService.cpp) | Run bounded model requests and instrument tools | tool dispatch and source proposals |
+| [AIService.cpp](../../src/app/AIService.cpp) | Run bounded model requests and instrument tools | tool dispatch and source proposals |
 | [offline_main.cpp](../../src/host/offline_main.cpp) | Run the same compiler and engine without the GUI | `main`, `render` |
 
 JUCE supplies native audio devices, MIDI and plugin wrappers. It does not define the Flows language. React arranges the interface. CodeMirror manages the text editor. Neither produces audio samples.

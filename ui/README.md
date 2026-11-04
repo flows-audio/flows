@@ -1,4 +1,4 @@
-# Editor and native bridge
+# Editor and host bridge
 
 The React/CodeMirror UI edits `.flows` source. Native compiler metadata supplies
 signal spans, graph nodes, parameters, choices and diagnostics. DSP remains in
@@ -7,12 +7,14 @@ simulation of the instrument.
 
 ```sh
 npm ci
-npm run build
-npm run dev
+npm run build        # the editor embedded in the macOS app
+npm run build:web    # the browser site (needs the WebAssembly core; see docs/WEB.md)
+npm run dev:web      # browser editor with hot reload against build-web/web
+npm run test:web     # Playwright: Chromium, Firefox and WebKit
 ```
 
-The Vite development server can preview layout. Audio, files, credentials and
-AI tools need the native host. Use the production macOS app to verify them.
+`npm run dev` previews layout without a host. Audio, files, credentials and AI
+need a host: the macOS app or the browser build.
 
 ## Interaction
 
@@ -32,12 +34,21 @@ AI tools need the native host. Use the production macOS app to verify them.
 - Sequencer lanes select their own instrument/sample, level and mute. Running
   transport enables continuous beat-aligned observation even when lanes are mute.
 
-## Bridge contract
+## Host contract
 
+[`protocol/flows-protocol.json`](../protocol/flows-protocol.json) defines every
+request (owner, params, result) and event; `src/protocol.gen.ts` is generated
+from it with `npm run protocol` and the wire types in `types.ts` re-export it.
+Components call `request()` and `subscribe()` from `client.ts`, which carries
+them over a transport: `transports/juce.ts` (the WebView bridge:
 `flowsRequest` receives `{id, method, params}` and returns
-`{id, ok, result, error}`. `flowsState` publishes document/runtime state;
-`flowsTelemetry` carries observations. The native browser accepts only bundled
-resources and does not expose privileged integration to arbitrary websites.
+`{id, ok, result, error}`) or `web/host.ts` (the WebAssembly core in the page).
+`flowsState` events contain only changed top-level snapshot slices; the client
+assembles full snapshots. `flowsTelemetry` carries observations and
+`flowsAgent` assistant progress. UI features branch on
+`snapshot.capabilities` (for example `audioSettings`, `fileDialogs`,
+`secrets`), never on the transport. The native WebView serves only the
+embedded build and does not expose privileged integration to arbitrary websites.
 
 `DocumentSession` serializes source edits and activation. Mutations carry
 document ID and expected revision; a conflict preserves the user's draft.

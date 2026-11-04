@@ -12,6 +12,7 @@ Flow and AI assistant all work with the same instrument source.
 *A saw oscillator through a lowpass filter, with probes before and after processing.*
 
 [Download the macOS preview](https://github.com/flows-audio/flows/releases/latest)
+· [Run it in a browser](docs/WEB.md)
 · [Language and instruments](docs/LANGUAGE.md)
 · [Architecture](docs/ARCHITECTURE.md)
 · [Source-guided learning](docs/learn/README.md)
@@ -60,8 +61,18 @@ through your DAW instead.
 
 **AI is optional.** Synthesis, editing and probes work without an account or
 API key. To use the assistant, configure your own OpenAI-compatible endpoint
-and model in its global settings. Keys use macOS Keychain. Source proposals
-require Apply; the assistant does not silently replace your instrument.
+and model in its global settings. Keys use macOS Keychain (in the browser they
+stay in the current tab only). Source proposals require Apply; the assistant
+does not silently replace your instrument.
+
+## In a browser
+
+The same instrument runs in current Chrome, Edge, Firefox and Safari: the C++
+core is compiled to WebAssembly and plays through an audio worklet, with the
+same editor. The workspace is saved in the browser; export instrument packages
+to keep copies. Sound starts with your first key press or click. Web MIDI
+keyboards work where the browser supports them (not in Safari). See
+[Flows in the browser](docs/WEB.md) for hosting, shortcuts and limits.
 
 ## A small instrument
 
@@ -113,6 +124,7 @@ instruments and comparisons.
 | [React](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) | Workspace, sequencer, Signal Flow and assistant interface |
 | [CodeMirror 6](https://codemirror.net/) + [Lezer](https://lezer.codemirror.net/) | Code editing and syntax highlighting, with Flows-specific completion and controls |
 | Canvas 2D + SVG | Signal plots and the flow diagram |
+| [Emscripten](https://emscripten.org/) / WebAssembly | The browser build: the same core, threads and an audio worklet |
 
 CMake/Ninja build the C++ targets; Vite bundles the frontend. Dependency
 versions, notices and licenses are documented in [THIRD_PARTY.md](THIRD_PARTY.md).
@@ -124,8 +136,8 @@ versions, notices and licenses are documented in [THIRD_PARTY.md](THIRD_PARTY.md
 | macOS Apple Silicon standalone | Preview build available |
 | macOS AU / VST3 | Build targets and automated wrapper tests; host compatibility remains limited |
 | Windows / Linux compiler and DSP | Linux CI build/tests passed; Windows builds are not yet verified |
-| Windows / Linux desktop app | Planned; native window, WebView and credential adapters need work |
-| Browser-only instrument | Not implemented |
+| Windows / Linux desktop app | Planned; the portable app core is ready, native window/WebView/credential adapters need work |
+| Browser | Static site built from each release; tested in Chromium, Firefox and WebKit |
 
 The language and file formats may change. Effects run per voice; there is no
 global post-mix FX chain, wavetable editor or independent sample time-stretch.
@@ -162,6 +174,15 @@ modified copies in the build directory. Your JUCE checkout is not edited.
 Building does not install AU/VST3 plugins. Bundle paths and packaging are in
 [BUILDING.md](BUILDING.md); tests are explained in [test/README.md](test/README.md).
 
+For the browser build, install Emscripten 6.0.13 and run:
+
+```sh
+emcmake cmake --preset web
+cmake --build --preset web --parallel 2
+npm ci --prefix ui && npm run build:web --prefix ui
+npm run preview:web --prefix ui
+```
+
 ## Contribute
 
 Bug reports, musical examples, clearer explanations and platform fixes are
@@ -175,6 +196,7 @@ and [THIRD_PARTY.md](THIRD_PARTY.md) for dependencies and attribution.
 The complete application is licensed under **AGPL-3.0-only**. The independent
 compiler (`src/compiler/`) and DSP engine (`src/engine/`) remain **Apache-2.0**
 under their directory licenses. Linked JUCE modules and other dependencies
-retain their own licenses. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
+retain their own licenses. The browser build includes the license, third-party
+notices and a link to its matching source. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
 [THIRD_PARTY.md](THIRD_PARTY.md). Source for each binary release is available at
 its matching public tag and in the release package.
