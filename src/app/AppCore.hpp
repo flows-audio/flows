@@ -163,6 +163,9 @@ private:
     std::mutex mutex_;
     json::Value preferences_;
     json::Array files_, samples_;
+    // Incremented whenever a request rescans the workspace; the worker drops a
+    // periodic scan that started before it, which could miss the request's files.
+    std::atomic<std::uint64_t> listingGeneration_{0};
     SampleAssets sampleAssets_;
     std::uint64_t requestedRevision_ = 1, preparedRevision_ = 0;
     double preparedRate_ = 0;
@@ -211,6 +214,7 @@ private:
     void activateLocked(const std::string&);
     void resetActiveAudioLocked();
     void saveLocked(Document&);
+    void refreshFilesLocked();
     void savePreferencesLocked();
     SequencePattern loadSequenceLocked(const std::string&) const;
     SequenceSound loadSequenceSoundLocked(const std::string&) const;

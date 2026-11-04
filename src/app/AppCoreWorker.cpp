@@ -384,6 +384,7 @@ void AppCore::worker(std::stop_token stop) {
         while (sequenceSession.frames().readSlot()) sequenceSession.frames().commitRead();
         const auto now = std::chrono::steady_clock::now();
         if (now >= nextCheckpoint) {
+            const auto generation = listingGeneration_.load();
             auto files = workspaceFiles(workspace_);
             auto samples = sampleAssets_.catalogue();
             try {
@@ -391,8 +392,11 @@ void AppCore::worker(std::stop_token stop) {
                 std::vector<std::string> sources;
                 {
                     std::lock_guard lock(mutex_);
-                    files_ = std::move(files);
-                    samples_ = std::move(samples);
+                    // A request rescanned during this scan; its listing is newer.
+                    if (generation == listingGeneration_.load()) {
+                        files_ = std::move(files);
+                        samples_ = std::move(samples);
+                    }
                     updateCheckpointLocked();
                     if (options_.standalone) {
                         recovery = recoveryLocked(false);

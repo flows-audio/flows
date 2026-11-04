@@ -7,6 +7,7 @@
 #include "app/AppCore.hpp"
 #include "app/Files.hpp"
 #include "app/Text.hpp"
+#include "app/WorkspaceLayout.hpp"
 
 #include <chrono>
 #include <filesystem>
@@ -133,6 +134,11 @@ int runScript(const fs::path& repo, const fs::path& out) {
         auto entry = json::object({{"label", label}, {"method", method}, {"params", params}});
         try {
             auto result = core->request(method, params);
+            // A returned snapshot lists the workspace as the request left it,
+            // not as of the worker's last periodic scan.
+            if (const auto* listed = result["files"].getArray())
+                check(Value(*listed) == Value(workspaceFiles(folder.path / "Workspace")),
+                      "the snapshot's file list does not match the workspace");
             if (json::str(step, "waitFor") == "ready") {
                 waitReady(*core);
                 if (result.has("sessionId")) result = core->snapshot();

@@ -338,7 +338,7 @@ void AppCore::configureWorkspace() {
         }
     runtime_.bpm.store(preferences_["bpm"].asDouble());
     samples_ = sampleAssets_.catalogue();
-    files_ = workspaceFiles(workspace_);
+    refreshFilesLocked();
 }
 
 void AppCore::cacheActiveLocked() {
@@ -584,15 +584,23 @@ std::vector<std::string> AppCore::packageSourcesLocked() const {
     (sequenceSound_.pinned() ? sequenceSound_ : documentSequenceSound_).collect(sources);
     return sources;
 }
+// Requests that add, rename or remove workspace files list them at once
+// instead of waiting for the worker's periodic scan.
+void AppCore::refreshFilesLocked() {
+    files_ = workspaceFiles(workspace_);
+    ++listingGeneration_;
+}
 void AppCore::saveLocked(Document& document) {
     if (document.path.empty()) fail("No instrument is open");
     const auto file = files::child(workspace_, document.path);
     if (!file) fail("Could not save instrument");
+    const bool created = !files::exists(*file);
     try {
         files::writeAtomic(*file, document.text);
     } catch (const std::exception&) {
         fail("Could not save instrument");
     }
+    if (created) refreshFilesLocked();
     const auto cached = inactiveDocuments_.find(document.path);
     const bool active = document.path == document_.path;
     saveSequenceLocked(document.path, active ? sequencePattern_ : cached->second.sequencer,
@@ -1237,7 +1245,7 @@ json::Value AppCore::request(const std::string& method, const json::Value& param
             }
             target = workspace_ / sampleAssets_.importAudio(staged, json::str(params, "folder"));
         }
-        files_ = workspaceFiles(workspace_);
+        refreshFilesLocked();
         samples_ = sampleAssets_.catalogue();
         const auto imported = files::relative(workspace_, target);
         lock.unlock();
@@ -1275,6 +1283,7 @@ json::Value AppCore::request(const std::string& method, const json::Value& param
         } catch (const std::exception&) {
             fail(samplePath.empty() ? "Could not create instrument" : "Could not create sampler instrument");
         }
+        refreshFilesLocked();
         lock.unlock();
         return request("document.open", json::object({{"path", files::relative(workspace_, file)}}));
     } else if (method == "document.rename") {
@@ -1348,6 +1357,7 @@ json::Value AppCore::request(const std::string& method, const json::Value& param
         documentSequenceSound_.rename(previousPath, nextPath);
         retainSequenceStateLocked();
         if (previousPath != nextPath) files::remove(sequenceFile(previousPath));
+        refreshFilesLocked();
         updateCheckpointLocked();
     } else if (method == "document.open") {
         const auto path = json::str(params, "path");
@@ -1624,7 +1634,7 @@ json::Value AppCore::request(const std::string& method, const json::Value& param
                 fail("Could not save the generated instrument");
             }
             proposals_.erase(it);
-            files_ = workspaceFiles(workspace_);
+            refreshFilesLocked();
             lock.unlock();
             return request("document.open", json::object({{"path", files::relative(workspace_, file)}}));
         }
@@ -1642,6 +1652,7 @@ json::Value AppCore::request(const std::string& method, const json::Value& param
             }
         }
         loadPackageLocked(json::parseBounded(json::str(params, "text"), maximumInstrumentPackageBytes), true);
+        refreshFilesLocked();
     } else if (method == "project.exportText")
         return json::Value(json::stringify(packageLocked()));
     else
