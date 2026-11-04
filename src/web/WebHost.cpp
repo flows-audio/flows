@@ -2,7 +2,7 @@
 // and pthreads (compilation, analysis, assistant); AudioRuntime runs in a Wasm
 // Audio Worklet that shares the same memory, so the lock-free queues between
 // them work exactly as in the native app. JavaScript reaches this file
-// through the flows_* exports below (see ui/src/web/core.ts).
+// through the flows_* exports below (see ui/src/web/host.ts).
 #include "app/AppCore.hpp"
 #include "app/Files.hpp"
 #include "app/Protocol.hpp"
@@ -13,11 +13,17 @@
 #include <emscripten/threading.h>
 #include <emscripten/webaudio.h>
 
+#include <algorithm>
+#include <array>
 #include <atomic>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <functional>
 #include <memory>
+#include <string>
+#include <vector>
 
 namespace {
 namespace fs = std::filesystem;
@@ -44,8 +50,10 @@ struct Host {
 };
 Host* host = nullptr;
 
+// Returns null when memory is exhausted; the page reports that as no reply.
 char* copy(const std::string& text) {
     auto* result = static_cast<char*>(std::malloc(text.size() + 1));
+    if (!result) return nullptr;
     std::memcpy(result, text.data(), text.size());
     result[text.size()] = 0;
     return result;
@@ -66,7 +74,7 @@ bool process(int, const AudioSampleFrame*, int numOutputs, AudioSampleFrame* out
     const int frames = output.samplesPerChannel;
     std::size_t count = 0;
     WebMidi message;
-    // One past the runtime's 256-message budget is enough to report overflow.
+    // Messages beyond one block's budget stay queued for the next quantum.
     while (count < host->rawBlock.size() && host->midi.pop(message)) {
         host->midiBlock[count] = message;
         host->rawBlock[count] = {host->midiBlock[count].bytes.data(), message.size, 0};

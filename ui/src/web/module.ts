@@ -28,7 +28,10 @@ export interface FlowsModule {
 /** Calls a C function with UTF-8 arguments; frees everything it allocates. */
 export function withStrings<T>(module: FlowsModule, values: string[], call: (...pointers: number[]) => T): T {
   const pointers = values.map(value => module.stringToNewUTF8(value));
-  try { return call(...pointers); } finally { pointers.forEach(pointer => module._free(pointer)); }
+  try {
+    if (pointers.includes(0)) throw new Error('Flows ran out of memory in this tab. Export your work and reload the page.');
+    return call(...pointers);
+  } finally { pointers.forEach(pointer => { if (pointer) module._free(pointer); }); }
 }
 /** Reads and frees a malloc'd UTF-8 result. Returns null for a null pointer. */
 export function takeString(module: FlowsModule, pointer: number): string | null {

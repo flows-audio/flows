@@ -16,7 +16,12 @@ export function installFetch(module: FlowsModule) {
       clearTimeout(timer);
       pending.delete(call);
       let pointer = 0;
-      if (bytes?.length) { pointer = module._malloc(bytes.length); module.HEAPU8.set(bytes, pointer); }
+      if (bytes?.length) {
+        pointer = module._malloc(bytes.length);
+        // The core's memory is exhausted: report the body as too large to keep.
+        if (!pointer) { module._flows_fetch_complete(call, status, 0, 0, FetchError.tooLarge); return; }
+        module.HEAPU8.set(bytes, pointer);
+      }
       module._flows_fetch_complete(call, status, pointer, bytes?.length ?? 0, error);
     };
     // Keys go only to the configured endpoint; no cookies, no referrer.
