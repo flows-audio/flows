@@ -40,7 +40,7 @@ Syntax highlighting is a lightweight CodeMirror token stream, not a second compi
 
 Registered range, step, and scale determine the gesture. Without a range, movement is relative to the current magnitude. A fixed range is read-only. Double-click can restore a registered default.
 
-Each move travels through the normal draft/compile path. Native [`applyLocked`](../../src/app/AppCore.cpp#L604) saves one starting text for the gesture, so Undo restores the whole drag rather than each intermediate value. Escape cancels the gesture and restores that starting text. Undo is routed to native history; CodeMirror does not maintain a competing source history.
+Each move travels through the normal draft/compile path. Native [`applyLocked`](../../src/app/AppCore.cpp#L630) saves one starting text for the gesture, so Undo restores the whole drag rather than each intermediate value. Escape cancels the gesture and restores that starting text. Undo is routed to native history; CodeMirror does not maintain a competing source history.
 
 ## Choices are compiler-owned too
 
@@ -86,9 +86,9 @@ pattern while another instrument has keyboard focus. Instrument packages and
 workspace recovery include captured sound source and required sample bytes, so
 recall does not require the original selected file.
 
-[`packageLocked`](../../src/app/AppCore.cpp#L624) serializes source, last playable source, preferences, and the 32-slot macro registry/runtime values. It does not save instantaneous phase, filter memory, or envelope stage. Import uses a local filename rather than depending on the original absolute path. There are no arbitrary filesystem module imports or asset dependency locks yet.
+[`packageLocked`](../../src/app/AppCore.cpp#L650) serializes source, last playable source, preferences, and the 32-slot macro registry/runtime values. It does not save instantaneous phase, filter memory, or envelope stage. Import uses a local filename rather than depending on the original absolute path. There are no arbitrary filesystem module imports or asset dependency locks yet.
 
-[`recoveryLocked`](../../src/app/AppCore.cpp#L666) covers up to 32 open documents. Recovery distinguishes a saved file from an unsaved draft. Clean recovered documents can reload newer disk text; dirty drafts are preserved. Undo history is process-local and is not reconstructed after restart. Opening an already open document uses its in-memory state; the recursive file inventory is not a general external-edit merge service.
+[`recoveryLocked`](../../src/app/AppCore.cpp#L692) covers up to 32 open documents. Recovery distinguishes a saved file from an unsaved draft. Clean recovered documents can reload newer disk text; dirty drafts are preserved. Undo history is process-local and is not reconstructed after restart. Opening an already open document uses its in-memory state; the recursive file inventory is not a general external-edit merge service.
 
 DAW save reads an immutable, prebuilt source/package snapshot and adds the current bounded macro values. Restore is handed to the worker for validation and compilation. This lets a plugin keep sounding without an open editor. It does not mean that arbitrary serialization is part of the render loop.
 
@@ -113,7 +113,7 @@ A follow-up uses up to 16 recent successful turns within a 64 KiB context budget
 
 Sending a prompt does not require an open instrument. The model can search names or source text, then read the identified files. Hidden files and paths outside the workspace are excluded. Source and tool results are treated as data. [`AIModels`](../../src/app/AIModels.cpp) saves multiple global profiles in the host's settings folder (`~/Library/Flows` in the macOS app); [`AISecrets.mm`](../../src/host/app/AISecrets.mm) stores their keys in macOS Keychain. The browser build keeps keys in memory only: closing or reloading the tab forgets them, and they must be entered again. The bottom selector chooses a saved profile across conversations. Keys never enter source packages or model context.
 
-The [network loop](../../src/app/AIService.cpp#L762) allows at most six model/tool rounds and twelve tool calls, with request/response limits, timeout, and cancellation. Endpoints must use HTTPS or strict loopback HTTP. Networking happens on the AI worker, never the audio callback.
+The [network loop](../../src/app/AIService.cpp#L765) allows at most six model/tool rounds and twelve tool calls, with request/response limits, timeout, and cancellation. Endpoints must use HTTPS or strict loopback HTTP. Networking happens on the AI worker, never the audio callback.
 
 ### What a render proves
 

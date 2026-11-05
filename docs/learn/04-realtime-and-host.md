@@ -27,7 +27,7 @@ CodeMirror draft
 → next audio block installs that candidate
 ```
 
-Each arrow has a concrete owner. UI draft handling is covered in chapter 06. The native receiver is [`request`](../../src/app/AppCore.cpp#L1150); preparation happens in [`worker`](../../src/app/AppCoreWorker.cpp#L20); transfer happens in [`submit`](../../src/app/RealtimeSession.cpp#L24); installation happens in [`install`](../../src/app/RealtimeSession.cpp#L101).
+Each arrow has a concrete owner. UI draft handling is covered in chapter 06. The native receiver is [`request`](../../src/app/AppCore.cpp#L1176); preparation happens in [`worker`](../../src/app/AppCoreWorker.cpp#L20); transfer happens in [`submit`](../../src/app/RealtimeSession.cpp#L24); installation happens in [`install`](../../src/app/RealtimeSession.cpp#L101).
 
 `PreparedProgram` contains a `Program`, fully constructed `Engine`, source text, structure identity, revisions, and initial runtime parameters. The audio callback never constructs the engine's vectors.
 
@@ -68,7 +68,7 @@ This mechanism softens a valid structural edit; it does not guarantee that a lar
 
 ### Switching to another instrument is a separate case
 
-Tabs retain independent source and view state. [`activateLocked`](../../src/app/AppCore.cpp#L397) switches the cursor instrument and its audio identity. That session panics the old instrument, does not replay its keys into the new one, and does not crossfade its ungated output into the new instrument. A broken draft stays muted after tab activation or recovery, even when historical successful source exists.
+Tabs retain independent source and view state. [`activateLocked`](../../src/app/AppCore.cpp#L415) switches the cursor instrument and its audio identity. That session panics the old instrument, does not replay its keys into the new one, and does not crossfade its ungated output into the new instrument. A broken draft stays muted after tab activation or recovery, even when historical successful source exists.
 
 The Step Sequencer can follow the cursor instrument or select another
 `.flows` file or sample. An explicit choice uses a second `RealtimeSession`.
@@ -103,9 +103,9 @@ Host events are sorted stably by sample time. A host block larger than 1024 fram
 
 ## Automation is runtime data, not repeated source rewriting
 
-The plugin exports 32 stable host slots, `macro01 … macro32`. A user binds a live source parameter to a slot. [`updateMacrosLocked`](../../src/app/AppCore.cpp#L960) publishes a revision-specific mapping from slot to graph parameter and range.
+The plugin exports 32 stable host slots, `macro01 … macro32`. A user binds a live source parameter to a slot. [`updateMacrosLocked`](../../src/app/AppCore.cpp#L986) publishes a revision-specific mapping from slot to graph parameter and range.
 
-The host's normalized 0 … 1 value maps to a linear range, or to a logarithmic range with positive endpoints. The processor preserves VST3 parameter-point timing and AU scheduled ramps rather than collapsing a block into its final value. The [automation conversion](../../src/app/AudioRuntime.cpp#L323) creates timestamped `ParameterUpdate`s; the engine applies them in sample order.
+The host's normalized 0 … 1 value maps to a linear range, or to a logarithmic range with positive endpoints. The processor preserves VST3 parameter-point timing and AU scheduled ramps rather than collapsing a block into its final value. The [automation conversion](../../src/app/AudioRuntime.cpp#L325) creates timestamped `ParameterUpdate`s; the engine applies them in sample order.
 
 Source text remains the authored instrument. Runtime automation can temporarily differ from those literals. The portable package and DAW checkpoint preserve runtime macro values separately. If a changed graph no longer proves a macro binding's identity, it is left unbound rather than controlling an unrelated node.
 
