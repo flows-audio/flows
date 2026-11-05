@@ -6,7 +6,12 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview --host 127.0.0.1"
+    "preview": "vite preview --host 127.0.0.1",
+    "build:web": "tsc --noEmit && vite build --mode web",
+    "dev:web": "vite --mode web --host 127.0.0.1",
+    "preview:web": "vite preview --mode web --host 127.0.0.1",
+    "test:web": "playwright test",
+    "protocol": "node ../protocol/generate.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "6.20.1",
@@ -23,9 +28,12 @@
     "remark-gfm": "4.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "22.20.5",
     "@types/react": "18.3.28",
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "4.7.0",
+    "esbuild": "0.25.12",
     "typescript": "5.7.3",
     "vite": "6.4.5"
   }

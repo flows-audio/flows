@@ -1,4 +1,4 @@
-#include "host/app/Analyzer.hpp"
+#include "app/Analyzer.hpp"
 
 #include <algorithm>
 #include <cmath>

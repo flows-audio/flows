@@ -10,6 +10,7 @@ package version must match it.
 | --- | --- |
 | Compiler/DSP/CLI | C++20, CMake 3.25+, Ninja, Python 3.9+ for tests |
 | macOS app/AU/VST3 | Above plus Xcode 26+ command-line tools, Node.js 22+, JUCE 8.0.7 |
+| Browser build | The compiler/DSP requirements (any OS; no Xcode or JUCE) plus Emscripten 6.0.13 and Node.js 22+ |
 | Frontend | `npm ci --prefix ui`, using the checked-in lockfile |
 
 JUCE is fetched separately under its own license. The build verifies the
@@ -33,6 +34,25 @@ Native window tests need a graphical macOS session. The core and UI unit checks
 can run without audio hardware. AU and VST3 tests load the built bundles in
 separate processes and do not install plugins. Test workspaces and the local
 mock AI endpoint are isolated from the user's documents and credentials.
+
+## Browser build
+
+```sh
+emcmake cmake --preset web
+cmake --build --preset web --parallel 2
+ctest --preset web
+npm run build:web --prefix ui
+```
+
+`ctest --preset web` runs the portable test suites compiled to WebAssembly in
+Node. To compare against native outputs, configure with
+`-DFLOWS_NATIVE_CLI=$PWD/build/flows` and
+`-DFLOWS_NATIVE_CONFORMANCE=$PWD/build/conformance/native.json` (produced by
+`ctest --preset dev`); this adds `render_parity` and `protocol_parity`.
+Browser tests: `npx --prefix ui playwright install` once, then
+`npm run test:web --prefix ui`. `python3 tools/package_web.py` packages
+`ui/dist-web` with licenses and the source link as `dist/Flows-<version>-web.zip`.
+Hosting requirements are in [docs/WEB.md](docs/WEB.md#hosting).
 
 ## Try a clean workspace
 
@@ -77,7 +97,10 @@ or notarize. Source should be available at the matching public tag.
 
 Maintainers can run **Publish macOS preview** in GitHub Actions for an existing
 release tag. It builds and tests on a fresh macOS runner, checks dependency
-notices, packages the binaries and source, then stores the package and checksums as an Actions artifact. Enable the
+notices, packages the binaries and source, then stores the package and checksums as an Actions artifact.
+A parallel job builds and tests the browser site from the same tag (portable
+suites as WebAssembly, parity with native, Chromium/Firefox/WebKit) and adds
+`Flows-<version>-web.zip` to the same release and checksums. Enable the
 `publish` input to publish the release. Only the separate publishing job receives repository write access;
 ordinary CI checks remain read-only.
 

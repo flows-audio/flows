@@ -181,7 +181,7 @@ Source: [`Parser::analysis_statement`, `program.cpp:684`](../../src/compiler/pro
 
 Removing choice **metadata** from the key does not make changing a chosen mode a live edit: the selected mode also changes an operation, flags, or policy. Those remain structural. The session compares this key together with document/sample-rate context before choosing state reuse or replacement.
 
-Source: [`dsp_structure_key`, `program.cpp:1195`](../../src/compiler/program.cpp#L1195), [`RealtimeSession::install`, RealtimeSession.cpp](../../src/host/app/RealtimeSession.cpp). Search for `const bool same` in the latter when tracing the handoff.
+Source: [`dsp_structure_key`, `program.cpp:1195`](../../src/compiler/program.cpp#L1195), [`RealtimeSession::install`, RealtimeSession.cpp](../../src/app/RealtimeSession.cpp). Search for `const bool same` in the latter when tracing the handoff.
 
 ## Bounds and tests
 

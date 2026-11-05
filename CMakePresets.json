@@ -15,15 +15,56 @@
       "displayName": "macOS application and plugins (Release)",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-app",
-      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release", "FLOWS_BUILD_APP": "ON" }
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "FLOWS_BUILD_APP": "ON"
+      }
+    },
+    {
+      "name": "web",
+      "displayName": "Browser (Emscripten, Release); configure with emcmake",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-web",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "dev", "configurePreset": "dev" },
-    { "name": "app", "configurePreset": "app" }
+    {
+      "name": "dev",
+      "configurePreset": "dev"
+    },
+    {
+      "name": "app",
+      "configurePreset": "app"
+    },
+    {
+      "name": "web",
+      "configurePreset": "web"
+    }
   ],
   "testPresets": [
-    { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
-    { "name": "app", "configurePreset": "app", "output": { "outputOnFailure": true } }
+    {
+      "name": "dev",
+      "configurePreset": "dev",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "app",
+      "configurePreset": "app",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "web",
+      "configurePreset": "web",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

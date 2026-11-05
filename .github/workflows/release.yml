@@ -103,9 +103,78 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    outputs:
+      tested_commit: ${{ steps.release_tag.outputs.commit }}
+    env:
+      FLOWS_RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Verify exact release tag
+        id: release_tag
+        run: |
+          test "$FLOWS_RELEASE_TAG" = "v$(cat VERSION)"
+          git show-ref --verify "refs/tags/$FLOWS_RELEASE_TAG"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/$FLOWS_RELEASE_TAG^{commit}")"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Fetch and verify pinned Emscripten
+        run: bash .github/scripts/fetch-emsdk.sh
+      - name: Native reference outputs
+        run: |
+          cmake --preset dev
+          cmake --build --preset dev --target flows conformance_runner --parallel 2
+          ./build/conformance_runner --repo "$PWD" --out build/conformance/native.json
+      - run: >-
+          emcmake cmake --preset web
+          -DFLOWS_NATIVE_CLI="$PWD/build/flows"
+          -DFLOWS_NATIVE_CONFORMANCE="$PWD/build/conformance/native.json"
+      - run: cmake --build --preset web --parallel 2
+      - run: ctest --preset web --output-junit results.xml
+      - run: npm ci --prefix ui
+      - run: npm audit --prefix ui --audit-level=high
+      - run: npm run build:web --prefix ui
+      - name: Verify browser notices
+        run: |
+          python3 tools/collect_licenses.py --emscripten-dir "$EMSCRIPTEN_ROOT"
+          git diff --exit-code
+      - name: Install test browsers
+        working-directory: ui
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Virtual audio output for the browser tests
+        run: bash .github/scripts/virtual-audio.sh
+      - name: Browser tests
+        working-directory: ui
+        env:
+          CI: "true"
+        run: npm run test:web
+      - name: Package the static site with license and source notices
+        run: |
+          python3 tools/package_web.py --tag "$FLOWS_RELEASE_TAG"
+          (cd dist && sha256sum Flows-*-web.zip > SHA256SUMS-web.txt)
+      - name: Store tested site
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-site
+          path: |
+            dist/Flows-*-web.zip
+            dist/SHA256SUMS-web.txt
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     if: ${{ inputs.publish }}
-    needs: build
+    needs: [build, web]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -117,9 +186,21 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: macos-preview
+      - name: Download the tested browser site
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: web-site
+          path: dist
       - name: Verify package checksums
         working-directory: dist
-        run: sha256sum --check SHA256SUMS.txt
+        env:
+          WEB_COMMIT: ${{ needs.web.outputs.tested_commit }}
+          MACOS_COMMIT: ${{ needs.build.outputs.tested_commit }}
+        run: |
+          test "$WEB_COMMIT" = "$MACOS_COMMIT"
+          sha256sum --check SHA256SUMS.txt
+          sha256sum --check SHA256SUMS-web.txt
+          cat SHA256SUMS-web.txt >> SHA256SUMS.txt
       - name: Upload verified artifacts and publish
         env:
           GH_TOKEN: ${{ github.token }}

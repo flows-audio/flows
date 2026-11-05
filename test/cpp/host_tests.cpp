@@ -1,6 +1,7 @@
 #include "host/app/FlowsProcessor.hpp"
-#include "host/app/AIEndpoint.hpp"
-#include "host/app/BundledExamples.hpp"
+#include "app/AIEndpoint.hpp"
+#include "app/BundledExamples.hpp"
+#include "app/Text.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -17,31 +18,30 @@ using namespace juce;
 using namespace flows::app;
 using Clock = std::chrono::steady_clock;
 void check(bool condition,const std::string& message){if(!condition)throw std::runtime_error(message);}
-AISecrets memorySecrets() {
-    auto keys=std::make_shared<std::map<String,String>>();
-    return {[keys](const String& id){return (*keys)[id];},[keys](const String& id,const String& key){(*keys)[id]=key;},[keys](const String& id){keys->erase(id);}};
-}
+AISecrets memorySecrets() { return memoryAISecrets(true); }
+std::string sha(const MemoryBlock& bytes) { return flows::text::sha256Hex(std::string_view(static_cast<const char*>(bytes.getData()), bytes.getSize())); }
+std::filesystem::path aiConfigDirectory() { return SystemStats::getEnvironmentVariable("FLOWS_AI_CONFIG_DIR",{}).toStdString(); }
 void global_model_tests() {
-    auto secrets=memorySecrets();AIModels first(secrets),second(secrets);
-    first.save(object({{"name","First"},{"endpoint","https://one.invalid/v1"},{"model","one"},{"apiKey","model-test-key"}}));
-    const auto id=str(first.snapshot(),"selectedId");
+    auto secrets=memorySecrets();AIModels first(aiConfigDirectory(),secrets),second(aiConfigDirectory(),secrets);
+    first.save(flows::json::object({{"name","First"},{"endpoint","https://one.invalid/v1"},{"model","one"},{"apiKey","model-test-key"}}));
+    const auto id=flows::json::str(first.snapshot(),"selectedId");
     check(second.connection().key=="model-test-key","Global models did not survive a store recreation.");
-    second.save(object({{"endpoint","https://two.invalid/v1"},{"model","two"},{"apiKey","other-test-key"}}));
-    check(get(first.snapshot(),"profiles").size()==2,"Adding a model overwrote the first profile.");
+    second.save(flows::json::object({{"endpoint","https://two.invalid/v1"},{"model","two"},{"apiKey","other-test-key"}}));
+    check(first.snapshot()["profiles"].size()==2,"Adding a model overwrote the first profile.");
     first.select(id);check(second.connection().model=="one","Selection was not shared between instances.");
-    first.save(object({{"id",id},{"endpoint","https://one.invalid/v1"},{"model","renamed"}}));
+    first.save(flows::json::object({{"id",id},{"endpoint","https://one.invalid/v1"},{"model","renamed"}}));
     check(second.connection().key=="model-test-key","Editing a model lost its saved key.");
-    first.save(object({{"id",id},{"endpoint","https://different.invalid/v1"},{"model","renamed"}}));
-    check(second.connection().key.isEmpty(),"Changing endpoints reused another provider's key.");
-    check(!JSON::toString(first.snapshot()).contains("test-key"),"Public model metadata exposed a key.");
+    first.save(flows::json::object({{"id",id},{"endpoint","https://different.invalid/v1"},{"model","renamed"}}));
+    check(second.connection().key.empty(),"Changing endpoints reused another provider's key.");
+    check(flows::json::stringify(first.snapshot()).find("test-key")==std::string::npos,"Public model metadata exposed a key.");
     const auto file=File(SystemStats::getEnvironmentVariable("FLOWS_AI_CONFIG_DIR",{})).getChildFile("ai-models.json");
     check(!file.loadFileAsString().contains("test-key"),"Plaintext key appeared in model configuration.");
-    AISecrets denied{[](const String&){return String();},[](const String&,const String&){throw std::runtime_error("Keychain denied");},[](const String&){}};
-    AIModels broken(denied);const auto before=file.loadFileAsString();bool failed=false;
-    try{broken.save(object({{"endpoint","https://denied.invalid"},{"model","denied"},{"apiKey","new-test-key"}}));}catch(...){failed=true;}
+    AISecrets denied;denied.read=[](const std::string&){return std::string();};denied.write=[](const std::string&,const std::string&){throw std::runtime_error("Keychain denied");};denied.remove=[](const std::string&){};
+    AIModels broken(aiConfigDirectory(),denied);const auto before=file.loadFileAsString();bool failed=false;
+    try{broken.save(flows::json::object({{"endpoint","https://denied.invalid"},{"model","denied"},{"apiKey","new-test-key"}}));}catch(...){failed=true;}
     check(failed && file.loadFileAsString()==before,"Credential failure damaged saved model settings.");
-    first.remove(id);check(get(second.snapshot(),"profiles").size()==1,"Removing a model was not global.");
-    second.remove(str(second.snapshot(),"selectedId"));check(first.connection().model.isEmpty(),"Last model removal retained a stale connection.");
+    first.remove(id);check(second.snapshot()["profiles"].size()==1,"Removing a model was not global.");
+    second.remove(flows::json::str(second.snapshot(),"selectedId"));check(first.connection().model.empty(),"Last model removal retained a stale connection.");
 }
 const String code=String::fromUTF8("# 音色 🎹 é\nimport standard as std\nfrom lib.osc import ClassicSine\nInst.sigstream(std.event.keys.poly()) as key:\n    osc = ClassicSine.make()\n    raw = osc(pitch: key.pitch, level: -6db)\n    return raw * key.gate * key.velocity\n");
 var document(FlowsProcessor& p){return get(p.snapshot(),"document");}
@@ -729,21 +729,22 @@ void bundled_example_migration_tests() {
     const auto fixtures=File(__FILE__).getParentDirectory().getParentDirectory().getChildFile("fixtures/instruments");
     for(const auto& example:retiredBundledExamples) {
         MemoryBlock bytes;check(fixtures.getChildFile(example.name).loadFileAsData(bytes),"Missing original example migration fixture.");
-        check(SHA256(bytes).toHexString()==example.sha256,"Retired factory example hash is stale.");
+        check(sha(bytes)==example.sha256,"Retired factory example hash is stale.");
         check(workspace.getChildFile(example.name).replaceWithData(bytes.getData(),bytes.getSize()),"Could not seed factory example.");
     }
     const auto edited=workspace.getChildFile(retiredBundledExamples[1].name);
     const auto changed=edited.loadFileAsString()+"\n# My edited instrument\n";
     check(edited.replaceWithText(changed),"Could not write edited example.");
     MemoryBlock editedBytes;check(edited.loadFileAsData(editedBytes),"Could not read edited example bytes.");
-    const std::vector<String> opened{retiredBundledExamples[0].name};
-    check(retireBundledExamples(workspace,opened)==1,"Migration must retire only closed, byte-identical factory examples.");
+    const std::vector<std::string> opened{retiredBundledExamples[0].name};
+    const std::filesystem::path workspacePath=workspace.getFullPathName().toStdString();
+    check(retireBundledExamples(workspacePath,opened)==1,"Migration must retire only closed, byte-identical factory examples.");
     MemoryBlock retained,openedBytes;
     check(edited.loadFileAsData(retained)&&retained==editedBytes,"Migration modified edited instrument bytes.");
-    check(workspace.getChildFile(retiredBundledExamples[0].name).loadFileAsData(openedBytes)&&SHA256(openedBytes).toHexString()==retiredBundledExamples[0].sha256,"Migration modified an open instrument.");
+    check(workspace.getChildFile(retiredBundledExamples[0].name).loadFileAsData(openedBytes)&&sha(openedBytes)==retiredBundledExamples[0].sha256,"Migration modified an open instrument.");
     const auto backup=workspace.getChildFile(".example-backups").getChildFile(String(retiredBundledExamples[2].name)+".bak");
-    MemoryBlock saved;check(backup.loadFileAsData(saved)&&SHA256(saved).toHexString()==retiredBundledExamples[2].sha256,"Factory backup lost original bytes.");
-    check(!workspace.getChildFile(retiredBundledExamples[2].name).exists()&&retireBundledExamples(workspace,opened)==0,"Repeated example migration changed the workspace.");
+    MemoryBlock saved;check(backup.loadFileAsData(saved)&&sha(saved)==retiredBundledExamples[2].sha256,"Factory backup lost original bytes.");
+    check(!workspace.getChildFile(retiredBundledExamples[2].name).exists()&&retireBundledExamples(workspacePath,opened)==0,"Repeated example migration changed the workspace.");
 }
 void workspace_recovery_tests() {
     const auto previousWorkspace=SystemStats::getEnvironmentVariable("FLOWS_WORKSPACE",{});

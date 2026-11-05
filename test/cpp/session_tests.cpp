@@ -1,5 +1,5 @@
-#include "host/app/RealtimeSession.hpp"
-#include "host/app/Analyzer.hpp"
+#include "app/RealtimeSession.hpp"
+#include "app/Analyzer.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>

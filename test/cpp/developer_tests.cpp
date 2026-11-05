@@ -1,7 +1,7 @@
 #include "compiler/program.hpp"
 #include "engine/engine.hpp"
-#include "host/app/RealtimeSession.hpp"
-#include "host/app/DataflowGraph.hpp"
+#include "app/RealtimeSession.hpp"
+#include "app/DataflowGraph.hpp"
 #include <algorithm>
 #include <array>
 #include <cmath>

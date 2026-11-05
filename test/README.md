@@ -6,10 +6,14 @@ instrument, machine, operating system or DAW.
 ```sh
 ctest --preset dev
 ctest --preset app
+ctest --preset web          # after emcmake cmake --preset web
+npm run test:web --prefix ui
 ```
 
 Build the corresponding preset first. The app suite also requires frontend
 dependencies, JUCE and a graphical macOS session for native window checks.
+The web preset runs the portable suites compiled to WebAssembly under Node;
+`npm run test:web` drives the built site in Chromium, Firefox and WebKit.
 
 | Area | Coverage |
 | --- | --- |
@@ -25,6 +29,9 @@ dependencies, JUCE and a graphical macOS session for native window checks.
 | Native editor | WebKit layout, cursor/text/click geometry, completion, gestures, panels, splits, probes and assistant views |
 | AU/VST3 | Real wrappers loaded in separate processes; MIDI offsets, stereo, tempo, automation and state |
 | Assistant | Mock-provider compile/render/compare, proposal scope/staleness, cancellation, history and credential-store injection |
+| Protocol | Every UI method is defined in the schema; a scripted session through the core validates params and results, and every core method is dispatched |
+| Native/WebAssembly parity | The same scripted session returns identical responses from both cores; every audio case renders within 2 PCM16 steps (in practice identical) |
+| Browser | Startup, compile, audio worklet output, browser file import, storage across reloads, single-tab handoff, device settings and the assistant's network bridge |
 
 Seven instruments in `presets/` are reference examples. Internal regressions
 live in `fixtures/`; nine event cases live in `cases/`. The hierarchical

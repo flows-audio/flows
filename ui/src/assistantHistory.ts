@@ -1,9 +1,6 @@
 import type { AgentActivity, AgentEvent } from './types';
-
-export interface AssistantMessage { activity?: AgentActivity[]; startedAt?: number; finishedAt?: number; id: string; prompt: string; text: string; status: string; baseRevision: number; documentId: string; documentPath?: string; proposedSource?: string; proposalAvailable?: boolean }
-export interface ConversationSummary { id: string; title: string; archived: boolean; deleted: boolean; updatedAt: number; messageCount: number }
-export interface Conversation extends ConversationSummary { messages: AssistantMessage[] }
-export interface HistoryView { conversations: ConversationSummary[]; activeConversationId: string; conversation: Conversation | null; runningConversationId?: string; runningRequestId?: string; historyError?: string }
+import type { AssistantMessage, Conversation, ConversationSummary, HistoryView } from './protocol.gen';
+export type { AssistantMessage, Conversation, ConversationSummary, HistoryView } from './protocol.gen';
 export type HistoryFolder = 'active' | 'archived' | 'trash';
 export const emptyHistory: HistoryView = { conversations: [], activeConversationId: '', conversation: null };
 export const isTerminal = (status: string) => ['done', 'completed', 'failed', 'cancelled', 'canceled', 'interrupted'].includes(status);

@@ -1,5 +1,6 @@
 #include "host/app/FlowsProcessor.hpp"
-#include "host/app/SampleAssets.hpp"
+#include "app/SampleAssets.hpp"
+#include "app/Text.hpp"
 #include <chrono>
 #include <cmath>
 #include <filesystem>
@@ -107,26 +108,29 @@ void recovery() {
     check(source(restored).contains("missing-recovery.wav") && audio(restored,true)<1e-7,"Recovery changed the draft or sounded its historical sample");
 }
 void literals_and_containment() {
-    const String text="# 'Samples/ignored.wav'\npath = 'Samples/Bob\\'s.wav'\nother = \"Samples/a\\\"b.wav\"\n";
+    const std::string text="# 'Samples/ignored.wav'\npath = 'Samples/Bob\\'s.wav'\nother = \"Samples/a\\\"b.wav\"\n";
     const auto refs=referencedSamplePaths({text});
     check(refs.size()==2 && refs.contains("Samples/Bob's.wav") && refs.contains("Samples/a\"b.wav"),"Resource collection did not match compiler string escapes/comments");
     const auto rewritten=remapSamplePaths(text,{{"Samples/Bob's.wav","Samples/A's.wav"},{"Samples/a\"b.wav","Samples/c\"d.wav"}});
-    check(rewritten.contains("'Samples/A\\'s.wav'") && rewritten.contains("\"Samples/c\\\"d.wav\""),"Path remapping produced invalid quoted source");
-    Workspace workspace; SampleAssets assets; assets.setRoot(workspace.root);
+    check(rewritten.find("'Samples/A\\'s.wav'")!=std::string::npos && rewritten.find("\"Samples/c\\\"d.wav\"")!=std::string::npos,"Path remapping produced invalid quoted source");
+    Workspace workspace; SampleAssets assets; assets.setRoot(workspace.root.getFullPathName().toStdString());
     auto external=workspace.root.getSiblingFile(workspace.root.getFileName()+"-external.wav"); wav(external);
     std::error_code status; std::filesystem::create_directories(workspace.root.getChildFile("Samples").getFullPathName().toStdString(),status);
     std::filesystem::create_symlink(external.getFullPathName().toStdString(),workspace.root.getChildFile("Samples/outside.wav").getFullPathName().toStdString(),status);
     check(!status,"Could not create containment test symlink"); check(!assets.isManaged("Samples/outside.wav"),"Catalogue accepted an escaping symlink");
-    auto data=bytes(external); auto entry=object({{"path","../escape.wav"},{"encoding","base64"},{"data",Base64::toBase64(data.getData(),data.getSize())}});
-    rejects([&]{ assets.restore(Array<var>{entry}); },"Embedded assets accepted path traversal");
-    entry.getDynamicObject()->setProperty("path","Samples/outside.wav"); rejects([&]{assets.restore(Array<var>{entry});},"Embedded assets wrote through an escaping symlink");
-    entry.getDynamicObject()->setProperty("path","Samples/valid-first.wav");
-    auto malformed=object({{"path","Samples/invalid-second.wav"},{"encoding","base64"},{"data","not base64"}});
-    rejects([&]{assets.restore(Array<var>{entry,malformed});},"Invalid later asset did not reject the batch");
+    auto data=bytes(external);
+    const auto encoded=flows::text::base64Encode(std::string_view(static_cast<const char*>(data.getData()),data.getSize()));
+    auto entry=flows::json::object({{"path","../escape.wav"},{"encoding","base64"},{"data",encoded}});
+    const auto list=[](std::initializer_list<flows::json::Value> items){ return flows::json::Value(flows::json::Array(items)); };
+    rejects([&]{ assets.restore(list({entry})); },"Embedded assets accepted path traversal");
+    entry.set("path","Samples/outside.wav"); rejects([&]{assets.restore(list({entry}));},"Embedded assets wrote through an escaping symlink");
+    entry.set("path","Samples/valid-first.wav");
+    auto malformed=flows::json::object({{"path","Samples/invalid-second.wav"},{"encoding","base64"},{"data","not base64"}});
+    rejects([&]{assets.restore(list({entry,malformed}));},"Invalid later asset did not reject the batch");
     check(!workspace.root.getChildFile("Samples/valid-first.wav").exists(),"Restore published an early asset before validating the complete batch");
     workspace.root.getChildFile("blocked").replaceWithText("file blocks folder");
-    auto blocked=object({{"path","blocked/second.wav"},{"encoding","base64"},{"data",Base64::toBase64(data.getData(),data.getSize())}});
-    rejects([&]{assets.restore(Array<var>{entry,blocked});},"Blocked second asset unexpectedly restored");
+    auto blocked=flows::json::object({{"path","blocked/second.wav"},{"encoding","base64"},{"data",encoded}});
+    rejects([&]{assets.restore(list({entry,blocked}));},"Blocked second asset unexpectedly restored");
     check(!workspace.root.getChildFile("Samples/valid-first.wav").exists(),"Restore did not roll back earlier files after a later write failed");
     external.deleteFile();
 }

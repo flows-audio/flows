@@ -1,5 +1,5 @@
-#include "host/app/StepSequencer.hpp"
-#include "host/app/Metronome.hpp"
+#include "app/StepSequencer.hpp"
+#include "app/Metronome.hpp"
 #include <array>
 #include <cstdlib>
 #include <iostream>

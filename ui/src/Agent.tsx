@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { AgentEvent, Snapshot } from './types';
-import { request, subscribe } from './native';
+import { request, subscribe } from './client';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
 import { AssistantMessage, emptyHistory, HistoryFolder, HistoryView, historyRows, isTerminal, mergeAgentEvent, mergeLoadedMessages } from './assistantHistory';
@@ -9,6 +9,7 @@ import './Agent.css';
 
 export function Agent({ snapshot, connected, flush, onResult, onError }: { snapshot: Snapshot | null; connected: boolean; flush: () => Promise<void>; onResult: (result: any) => void; onError: (error: unknown) => void }) {
   const [configuration, setConfiguration] = useState(false), [endpoint, setEndpoint] = useState('https://api.openai.com/v1'), [model, setModel] = useState(''), [apiKey, setApiKey] = useState('');
+  const sessionKeys = snapshot?.capabilities?.secrets === 'session';
   const [profileId, setProfileId] = useState(''), [profileName, setProfileName] = useState(''), [savingModel, setSavingModel] = useState(false);
   const [history, setHistory] = useState<HistoryView>(emptyHistory), [historyOpen, setHistoryOpen] = useState(false), [folder, setFolder] = useState<HistoryFolder>('active'), [query, setQuery] = useState('');
   const [reference, setReference] = useState('');
@@ -105,7 +106,7 @@ export function Agent({ snapshot, connected, flush, onResult, onError }: { snaps
       localPhase.current = 'sent';
       const acknowledgement = await request('ai.send', { requestId, conversationId, prompt: text, referencePath: reference });
       // Completion may already have arrived by this point.
-      const merged = mergeAgentEvent(cache.current.get(conversationId) || [], { requestId, conversationId, ...acknowledgement });
+      const merged = mergeAgentEvent(cache.current.get(conversationId) || [], acknowledgement);
       cache.current.set(conversationId, merged);
       const latest = historyRef.current;
       if (latest.conversation?.id === conversationId) commit({ ...latest, conversation: { ...latest.conversation, messages: merged } });
@@ -130,13 +131,13 @@ export function Agent({ snapshot, connected, flush, onResult, onError }: { snaps
       <button className={'icon-button ' + (configuration ? 'selected' : '')} title="AI connection settings" aria-label="AI connection settings" onClick={() => { setConfiguration(!configuration); setHistoryOpen(false); }}><Icon name="settings"/></button>
     </div></header>
     {configuration ? <form className="ai-configuration" onSubmit={async event => { event.preventDefault(); if (await changeModel('ai.models.save', { ...(profileId ? { id: profileId } : {}), name: profileName, endpoint, model, ...(apiKey ? { apiKey } : {}) })) { setApiKey(''); setConfiguration(false); } }}>
-      <div className="section-title">Global models</div><p>Available in every conversation and instrument. API keys are saved in macOS Keychain.</p>
+      <div className="section-title">Global models</div><p>Available in every conversation and instrument. {sessionKeys ? 'API keys stay in this browser tab only and are forgotten when it closes. Your endpoint must allow requests from this page (CORS).' : 'API keys are saved in macOS Keychain.'}</p>
       {(error || snapshot?.ai.settingsError) && <div className="agent-history-error" role="alert">{error || snapshot?.ai.settingsError}</div>}
       <label>Saved models<select aria-label="Saved models" value={profileId} disabled={savingModel || busy} onChange={event => editModel(event.target.value)}><option value="">New model…</option>{profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
       <label>Name<input aria-label="Model display name" value={profileName} onChange={event => setProfileName(event.target.value)} placeholder="Optional display name" maxLength={100}/></label>
       <label>Endpoint<input value={endpoint} onChange={event => setEndpoint(event.target.value)} placeholder="https://…/v1" required/></label>
       <label>Model<input value={model} onChange={event => setModel(event.target.value)} placeholder="Model identifier" maxLength={200} required/></label>
-      <label>API key<input type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} placeholder={profiles.find(p => p.id === profileId)?.hasKey ? 'Saved in Keychain · leave blank to keep' : 'API key'} autoComplete="off"/></label>
+      <label>API key<input type="password" value={apiKey} onChange={event => setApiKey(event.target.value)} placeholder={profiles.find(p => p.id === profileId)?.hasKey ? `${sessionKeys ? 'Kept for this tab' : 'Saved in Keychain'} · leave blank to keep` : 'API key'} autoComplete="off"/></label>
       <div className="model-settings-actions"><button className="primary-button" disabled={!connected || busy || savingModel}>{savingModel ? 'Saving…' : 'Save model'}</button>{profileId && <button type="button" className="secondary-button" disabled={busy || savingModel} onClick={async () => { if (await changeModel('ai.models.remove', { id: profileId })) editModel(''); }}>Remove model</button>}</div>
     </form> : <>
       <div className="agent-context"><span className={'connection-dot ' + (snapshot?.ai.configured ? 'active' : '')}/><span>{snapshot?.ai.configured ? snapshot.ai.model || 'Connected model' : 'No model connected'}</span><span className="spacer"/>{snapshot?.ai.configured && <small>LIVE</small>}</div>

@@ -7,7 +7,12 @@ import { Agent } from './Agent';
 import { Keyboard } from './Keyboard';
 import { Icon } from './Icon';
 import { AudioReadout, TempoControl, SignalView } from './Signals';
-import { nativeAvailable, request, subscribe } from './native';
+import { hostAvailable, request, subscribe, transportKind } from './client';
+import { AudioSettings } from './AudioSettings';
+import { ExternalLink } from './ExternalLink';
+import { editorShortcut, shortcutLabel, textSizeShortcut } from './keymap';
+import { audioAccept, bytesToBase64, download, pickFile, readImportableAudio } from './web/files';
+import { WebNotices } from './web/WebNotices';
 import { publishTelemetry, resetTelemetry, selectObservationVoice, selectObservationProjection } from './telemetry';
 import { Parameter, Snapshot, Telemetry } from './types';
 import { Macros } from './Macros';
@@ -55,7 +60,7 @@ export function App() {
   const groupStorageKey = useRef('');
   const updateGroups = useCallback((next: EditorGroup[]) => { groupsRef.current = next; setGroups(next); }, []);
   const [theme, setTheme] = useState(savedPreference('theme', 'moss')), [opacity, setOpacity] = useState(Number(savedPreference('opacity', '1')));
-  const [preferencesLoaded, setPreferencesLoaded] = useState(!nativeAvailable);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(!hostAvailable());
   const [split, setSplit] = useState(savedPreference('split', 'none')), [settings, setSettings] = useState(false);
   const [fontFamily, setFontFamily] = useState(savedPreference('fontFamily', DEFAULT_FONT)), [fontSize, setFontSize] = useState(migrateFont(savedNumber('fontSize', 16), savedNumber('layoutVersion', 0)));
   const [leftWidth, setLeftWidth] = useState(clamp(savedNumber('leftWidth', LAYOUT.leftWidth), 120, 520));
@@ -89,6 +94,11 @@ export function App() {
   const [probeFailure, setProbeFailure] = useState<{ key: string; message: string }>();
   const [probeFallback, setProbeFallback] = useState<{ key: string; signals: string[]; reason: string }>();
   const windowTransparency = snapshot?.capabilities?.windowTransparency === true;
+  const capabilities = snapshot?.capabilities;
+  // Browser keys and pickers differ from the native app's; decide before the first snapshot too.
+  const web = (capabilities?.host ?? (transportKind() === 'web' ? 'web' : '')) === 'web';
+  const browserFiles = capabilities?.fileDialogs === 'browser';
+  const [audioPanel, setAudioPanel] = useState(false);
   const auditionQueue = useRef(Promise.resolve()), previousInspector = useRef<{ documentId: string; signal: string | null }>({ documentId: '', signal: null });
   const notifyError = useCallback((value: unknown) => setError(value instanceof Error ? value.message : String(value)), []);
   if (!sessionRef.current) sessionRef.current = new DocumentSession(request, () => {
@@ -179,7 +189,7 @@ export function App() {
   const perform = useCallback(async (method: string, params: Record<string, unknown> = {}, documentId = desiredDocument.current) => {
     try {
       clearTimeout(timer.current); timer.current = undefined;
-      const isOpen = ['document.open', 'document.new', 'project.import'].includes(method);
+      const isOpen = ['document.open', 'document.new', 'project.import', 'project.importText'].includes(method);
       const group = focusedGroupRef.current, navigation = isOpen ? ++navigationSequence.current : navigationSequence.current;
       const result = await session.execute(method, params, isOpen ? undefined : documentId);
       const next = session.snapshot;
@@ -200,6 +210,46 @@ export function App() {
     } catch (cause) { notifyError(cause); return undefined; }
   }, [session, updateGroups, notifyError]);
   const compile = useCallback(() => perform('compile'), [perform]);
+  // Browser hosts pick files in the page: the picker must open inside the click.
+  const importPackage = useCallback(() => {
+    if (!browserFiles) { void perform('project.import'); return; }
+    void pickFile('.flowsinst,application/json').then(async file => {
+      if (!file) return;
+      if (file.size > 96 * 1024 * 1024) throw new Error('Instrument packages are limited to 96 MiB.');
+      await perform('project.importText', { text: await file.text() });
+    }).catch(notifyError);
+  }, [browserFiles, perform, notifyError]);
+  const exportPackage = useCallback(() => {
+    if (!browserFiles) { void perform('project.export'); return; }
+    void perform('project.exportText').then(text => {
+      if (typeof text !== 'string') return;
+      const name = basename(session.snapshot?.document.path || 'Instrument').replace(/\.flows$/i, '') || 'Instrument';
+      download(`${name}.flowsinst`, text, 'application/json');
+    }).catch(notifyError);
+  }, [browserFiles, perform, session, notifyError]);
+  const importSample = useCallback(() => {
+    if (!browserFiles) { void perform('sample.import'); return; }
+    void pickFile(audioAccept).then(async file => {
+      if (!file) return;
+      const audio = await readImportableAudio(file);
+      await perform('workspace.import', { folder: 'Samples', name: audio.name, data: bytesToBase64(audio.bytes) });
+    }).catch(notifyError);
+  }, [browserFiles, perform, notifyError]);
+  useEffect(() => {
+    const open = () => { setSettings(false); setAudioPanel(true); };
+    window.addEventListener('flows:audio-settings', open);
+    return () => window.removeEventListener('flows:audio-settings', open);
+  }, []);
+  useEffect(() => {
+    if (!web) return;
+    // Recovery keeps drafts, but the last edits may still be in flight.
+    const guard = (event: BeforeUnloadEvent) => {
+      if (!session.drafts.size && !session.documents().some(document => session.dirty(document.id))) return;
+      event.preventDefault(); event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [web, session]);
   const splitEditors = useCallback((orientation: 'vertical' | 'horizontal') => {
     if (split === orientation) {
       const all = [...new Set(groupsRef.current.flatMap(group => group.tabs))];
@@ -250,7 +300,7 @@ export function App() {
     if (audition && audition !== expanded) listen(audition, false);
   }, [expanded, activeId, listen]);
   useEffect(() => {
-    if (!nativeAvailable) return;
+    if (!hostAvailable()) return;
     const state = subscribe<Snapshot>('flowsState', receive), audio = subscribe<Telemetry>('flowsTelemetry', publishTelemetry);
     void request('session.get').then(receive).catch(notifyError);
     return () => { state(); audio(); clearTimeout(timer.current); timer.current = undefined; };
@@ -261,11 +311,11 @@ export function App() {
     document.documentElement.style.fontSize = `${12 * fontSize / 16}px`;
   }, [theme, opacity, fontFamily, fontSize, windowTransparency]);
   useEffect(() => {
-    if (nativeAvailable && !preferencesLoaded) return;
+    if (hostAvailable() && !preferencesLoaded) return;
     const preferences = { theme, opacity, split, fontFamily, fontSize, leftWidth, rightWidth, flowHeight, splitRatio, layoutVersion: 2, showExplorer, showAssistant, showDataflow, showKeyboard };
     const timer = setTimeout(() => {
       try { for (const [key, value] of Object.entries(preferences)) localStorage.setItem(`flows.${key}`, String(value)); } catch { /* Native preferences remain available. */ }
-      if (nativeAvailable) void request('preferences.set', preferences).catch(notifyError);
+      if (hostAvailable()) void request('preferences.set', preferences).catch(notifyError);
     }, 180);
     return () => clearTimeout(timer);
   }, [theme, opacity, split, fontFamily, fontSize, leftWidth, rightWidth, flowHeight, splitRatio, showExplorer, showAssistant, showDataflow, showKeyboard, preferencesLoaded, notifyError]);
@@ -283,30 +333,33 @@ export function App() {
   }, [groups]);
   useEffect(() => {
     const shortcuts = (event: KeyboardEvent) => {
-      if (event.isComposing || event.altKey || event.keyCode === 229) return;
-      const mod = mac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-      let action: (() => void) | undefined;
-      if (mod && !event.shiftKey && event.code === 'KeyW') action = () => requestClose(focusedGroupRef.current, groupsRef.current[focusedGroupRef.current].active);
-      if (mod && !event.shiftKey && event.code === 'Backslash') action = () => splitEditors('vertical');
-      if (mod && !event.shiftKey && ['Digit1', 'Digit2'].includes(event.code)) action = () => { const index = event.code === 'Digit1' ? 0 : 1; if (index === 0 || split !== 'none') activate(index, groupsRef.current[index].active, true); };
-      if ((mod && ['PageUp', 'PageDown'].includes(event.key)) || (event.ctrlKey && !event.metaKey && event.key === 'Tab')) action = () => {
+      const shortcut = editorShortcut(event, { mac, web });
+      if (!shortcut) return;
+      const action = () => {
         const index = focusedGroupRef.current, group = groupsRef.current[index];
-        if (!group.tabs.length) return;
-        const offset = event.key === 'PageUp' || event.shiftKey ? -1 : 1;
-        activate(index, group.tabs[(group.tabs.indexOf(group.active) + offset + group.tabs.length) % group.tabs.length], true);
+        if (shortcut === 'close') requestClose(index, group.active);
+        else if (shortcut === 'split') splitEditors('vertical');
+        else if (shortcut === 'focus-first' || shortcut === 'focus-second') {
+          const target = shortcut === 'focus-first' ? 0 : 1;
+          if (target === 0 || split !== 'none') activate(target, groupsRef.current[target].active, true);
+        } else if (group.tabs.length) {
+          const offset = shortcut === 'previous-tab' ? -1 : 1;
+          activate(index, group.tabs[(group.tabs.indexOf(group.active) + offset + group.tabs.length) % group.tabs.length], true);
+        }
       };
-      if (action) { event.preventDefault(); event.stopPropagation(); if (!event.repeat) action(); }
+      event.preventDefault(); event.stopPropagation(); if (!event.repeat) action();
     };
     window.addEventListener('keydown', shortcuts, true); return () => window.removeEventListener('keydown', shortcuts, true);
-  }, [mac, activate, split, splitEditors, requestClose]);
+  }, [mac, web, activate, split, splitEditors, requestClose]);
   useEffect(() => {
     const zoom = (event: KeyboardEvent) => {
-      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.isComposing || !['=', '+', '-', '0'].includes(event.key)) return;
+      const change = textSizeShortcut(event, { web });
+      if (!change) return;
       event.preventDefault(); event.stopPropagation();
-      setFontSize(value => event.key === '0' ? 16 : clamp(value + (event.key === '-' ? -1 : 1), 10, 32));
+      setFontSize(value => change === 'reset' ? 16 : clamp(value + (change === 'smaller' ? -1 : 1), 10, 32));
     };
     window.addEventListener('keydown', zoom, true); return () => window.removeEventListener('keydown', zoom, true);
-  }, []);
+  }, [web]);
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
       const panel = panelShortcut(event, mac); if (!panel) return;
@@ -337,7 +390,7 @@ export function App() {
     const selection = JSON.parse(probeSelectionKey) as { documentId?: string; signals: string[]; voice: number; projection: Projection; status?: string; focus?: string };
     let current = true;
     const stillActive = () => current && selection.documentId === desiredDocument.current && selection.documentId === acknowledged.current?.document.id;
-    if (nativeAvailable && selection.status === 'ready' && selection.documentId
+    if (hostAvailable() && selection.status === 'ready' && selection.documentId
       && stillActive()) {
       void subscribeObservation(signals => {
         if (!stillActive()) return Promise.reject(new Error('Observation request was superseded'));
@@ -366,7 +419,7 @@ export function App() {
     observationSkipped[name] = 'Automatic observation was reduced to one view. Select this signal to observe it.';
   const observationNotice = reducedObservation ? `Automatic observation reduced: ${reducedObservation.reason}` : undefined;
   useEffect(() => {
-    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setExpanded(null); setSettings(false); setSequencerOpen(false); setMacrosOpen(false); setRename(false); if (!closeBusy) setClosing(null); } };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setExpanded(null); setSettings(false); setAudioPanel(false); setSequencerOpen(false); setMacrosOpen(false); setRename(false); if (!closeBusy) setClosing(null); } };
     window.addEventListener('keydown', escape); return () => window.removeEventListener('keydown', escape);
   }, [closeBusy]);
   const revealSource = useCallback((from: number, to: number) => {
@@ -382,7 +435,7 @@ export function App() {
     const signal = state?.document.text === text ? state.compile.signals?.find(signal => signal.name === name) : undefined;
     if (signal) revealSource(signal.from, signal.to);
   }, [text, revealSource]);
-  const documentState = session.document(activeId), connected = nativeAvailable && Boolean(snapshot);
+  const documentState = session.document(activeId), connected = hostAvailable() && Boolean(snapshot);
   const instrumentReady = connected && !!activeId && snapshot?.document.id === activeId;
   const keyboardReady = instrumentReady && !editing && snapshot?.compile.status === 'ready' && snapshot.compile.revision === documentState?.revision;
   const sequencerOwnerId = snapshot?.sequencer?.ownerDocumentId || activeId;
@@ -415,9 +468,10 @@ export function App() {
   const visibleSplitRatio = clamp(splitRatio, splitMin, 1 - splitMin);
 
   return <main className="flows-app">
-    <header className="app-header"><button className={`transport-play ${demoRunning ? 'playing' : ''}`} disabled={!connected || (!demoRunning && !sequencerCanPlay)} title={demoRunning ? 'Stop step sequencer' : `Play step sequencer with ${sequencerSoundName}`} onClick={() => void perform('sequencer.play', { documentId: activeId, playing: !demoRunning }, activeId)}><Icon name={demoRunning ? 'stop' : 'play'} size={13}/></button><TempoControl bpm={snapshot?.audio.bpm ?? 138} host={snapshot?.audio.tempoSource === 'host'} disabled={!connected} onChange={bpm => void perform('transport.set', { bpm })}/><button className={`sequencer-toggle ${sequencerOpen ? 'selected' : ''}`} disabled={!connected || !snapshot?.sequencer} title="Choose a sound and edit notes, rhythm and playback modes" aria-expanded={sequencerOpen} aria-controls="step-sequencer" onClick={() => { setSettings(false); setSequencerOpen(!sequencerOpen); }}><Icon name="rows" size={15}/><span>Step sequencer</span><small>{snapshot?.sequencer?.length ?? 16}</small></button><span className="small-divider"/><div className="panel-toggles" role="group" aria-label="Workspace panels">{panelControls.map(({ panel, label, icon, visible, controls }) => { const action = `${visible ? 'Hide' : 'Show'} ${label}`, shortcut = panelShortcutLabel(panel, mac); return <button key={panel} className={`icon-button panel-toggle ${visible ? 'selected' : ''} ${panel === 'keyboard' ? 'keyboard-collapse' : ''}`} data-panel-toggle={panel} title={`${action} · ${shortcut}`} aria-label={`${action} · ${shortcut}`} aria-pressed={visible} aria-expanded={visible} aria-controls={controls} onClick={() => togglePanel(panel)}><Icon name={icon} size={16}/></button>; })}</div><div className="spacer"/><div className={`program-state ${['compiled', 'success', 'ready', 'valid'].includes(compileStatus) ? 'ready' : problem ? 'problem' : ''}`}><i/>{compileStatus === 'disconnected' ? 'Native host disconnected' : editing ? 'Editing source' : problem ? `${problem} diagnostic${problem === 1 ? '' : 's'}` : compileStatus}</div><button className={`icon-button typing-toggle mode-toggle ${typing ? 'selected' : ''}`} title={typing ? 'Perform mode · ⌘K · Drag parameters and play keys' : 'Edit mode · ⌘K · Edit source'} aria-pressed={typing} disabled={!connected} onClick={() => setTyping(!typing)}><Icon name="computer-keyboard"/><span>{typing ? 'Perform' : 'Edit'}</span></button><button className="icon-button" title="Appearance" onClick={() => setSettings(!settings)}><Icon name="settings"/></button><span className="small-divider"/><div className="header-audio-center"><AudioReadout/></div><span className="small-divider"/><button className="audio-device" title="Audio & MIDI settings" disabled={!connected} onClick={() => void perform('audio.settings')}><span className={`connection-dot ${snapshot?.audio.running ? 'active' : ''}`}/>{snapshot?.audio.sampleRate ? `${(snapshot.audio.sampleRate / 1000).toFixed(1)} kHz` : 'Audio disconnected'}<span> / {snapshot?.audio.blockSize ?? '—'}</span><Icon name="settings" size={12}/></button></header>
+    <header className="app-header"><button className={`transport-play ${demoRunning ? 'playing' : ''}`} disabled={!connected || (!demoRunning && !sequencerCanPlay)} title={demoRunning ? 'Stop step sequencer' : `Play step sequencer with ${sequencerSoundName}`} onClick={() => void perform('sequencer.play', { documentId: activeId, playing: !demoRunning }, activeId)}><Icon name={demoRunning ? 'stop' : 'play'} size={13}/></button><TempoControl bpm={snapshot?.audio.bpm ?? 138} host={snapshot?.audio.tempoSource === 'host'} disabled={!connected} onChange={bpm => void perform('transport.set', { bpm })}/><button className={`sequencer-toggle ${sequencerOpen ? 'selected' : ''}`} disabled={!connected || !snapshot?.sequencer} title="Choose a sound and edit notes, rhythm and playback modes" aria-expanded={sequencerOpen} aria-controls="step-sequencer" onClick={() => { setSettings(false); setSequencerOpen(!sequencerOpen); }}><Icon name="rows" size={15}/><span>Step sequencer</span><small>{snapshot?.sequencer?.length ?? 16}</small></button><span className="small-divider"/><div className="panel-toggles" role="group" aria-label="Workspace panels">{panelControls.map(({ panel, label, icon, visible, controls }) => { const action = `${visible ? 'Hide' : 'Show'} ${label}`, shortcut = panelShortcutLabel(panel, mac); return <button key={panel} className={`icon-button panel-toggle ${visible ? 'selected' : ''} ${panel === 'keyboard' ? 'keyboard-collapse' : ''}`} data-panel-toggle={panel} title={`${action} · ${shortcut}`} aria-label={`${action} · ${shortcut}`} aria-pressed={visible} aria-expanded={visible} aria-controls={controls} onClick={() => togglePanel(panel)}><Icon name={icon} size={16}/></button>; })}</div><div className="spacer"/><div className={`program-state ${['compiled', 'success', 'ready', 'valid'].includes(compileStatus) ? 'ready' : problem ? 'problem' : ''}`}><i/>{compileStatus === 'disconnected' ? 'Engine disconnected' : editing ? 'Editing source' : problem ? `${problem} diagnostic${problem === 1 ? '' : 's'}` : compileStatus}</div><button className={`icon-button typing-toggle mode-toggle ${typing ? 'selected' : ''}`} title={typing ? 'Perform mode · ⌘K · Drag parameters and play keys' : 'Edit mode · ⌘K · Edit source'} aria-pressed={typing} disabled={!connected} onClick={() => setTyping(!typing)}><Icon name="computer-keyboard"/><span>{typing ? 'Perform' : 'Edit'}</span></button><button className="icon-button" title="Appearance" onClick={() => setSettings(!settings)}><Icon name="settings"/></button><span className="small-divider"/><div className="header-audio-center"><AudioReadout/></div><span className="small-divider"/><button className="audio-device" title="Audio & MIDI settings" disabled={!connected} aria-expanded={capabilities?.audioSettings === 'in-app' ? audioPanel : undefined} onClick={() => { if (capabilities?.audioSettings === 'in-app') { setSettings(false); setAudioPanel(open => !open); } else void perform('audio.settings'); }}><span className={`connection-dot ${snapshot?.audio.running ? 'active' : ''}`}/>{web && !snapshot?.audio.running ? 'Sound off' : snapshot?.audio.sampleRate ? `${(snapshot.audio.sampleRate / 1000).toFixed(1)} kHz` : 'Audio disconnected'}{!(web && !snapshot?.audio.running) && <span> / {snapshot?.audio.blockSize ?? '—'}</span>}<Icon name="settings" size={12}/></button></header>
+    {web && <WebNotices storage={capabilities?.storage} onExport={exportPackage}/>}
     <div className="workspace" ref={workspaceRef} style={{ gridTemplateColumns: `${widths.left}px ${showExplorer ? 6 : 0}px minmax(0,1fr) ${showAssistant ? 6 : 0}px ${widths.right}px` }}>
-      <aside className="files-panel" id="explorer-panel" data-workspace-panel="explorer" hidden={!showExplorer}><header className="panel-heading"><span><Icon name="folder"/> EXPLORER</span><div className="explorer-actions"><button className="icon-button" title="New instrument" disabled={!connected} onClick={() => void perform('document.new')}><Icon name="add" size={15}/></button><button className="icon-button" title="Import instrument package" disabled={!connected} onClick={() => void perform('project.import')}><Icon name="import" size={14}/></button></div></header><div className="file-search"><input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Find instruments or samples…" aria-label="Filter instruments and samples"/><span>⌕</span></div><Explorer onImportFiles={async (files, folder) => { for (const file of files) { try { if (file.size > 64 * 1024 * 1024) throw new Error(`${file.name}: maximum file size is 64 MiB`); const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = () => reject(new Error(`Could not read ${file.name}`)); reader.readAsDataURL(file); }); await perform('workspace.import', { folder, name: file.name, data }); } catch (error) { notifyError(error); } } }} samples={snapshot?.samples || EMPTY} onImportSample={() => void perform('sample.import')} onSampleInstrument={samplePath => void perform('document.new', { samplePath })} files={snapshot?.files || EMPTY} query={filter} activePath={documentState?.path || ''} connected={connected} workspaceId={snapshot?.workspaceId} onOpen={path => void perform('document.open', { path })}/><div className="explorer-bottom"><button className="text-button" disabled={!connected} onClick={() => void perform('project.export')}><Icon name="export" size={14}/> Export instrument</button><div className="explorer-note">Code is the instrument.<br/>Listen at every step.</div></div></aside>
+      <aside className="files-panel" id="explorer-panel" data-workspace-panel="explorer" hidden={!showExplorer}><header className="panel-heading"><span><Icon name="folder"/> EXPLORER</span><div className="explorer-actions"><button className="icon-button" title="New instrument" disabled={!connected} onClick={() => void perform('document.new')}><Icon name="add" size={15}/></button><button className="icon-button" title="Import instrument package" disabled={!connected} onClick={importPackage}><Icon name="import" size={14}/></button></div></header><div className="file-search"><input value={filter} onChange={event => setFilter(event.target.value)} placeholder="Find instruments or samples…" aria-label="Filter instruments and samples"/><span>⌕</span></div><Explorer onImportFiles={async (files, folder) => { for (const file of files) { try { if (file.size > 64 * 1024 * 1024) throw new Error(`${file.name}: maximum file size is 64 MiB`); const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = () => reject(new Error(`Could not read ${file.name}`)); reader.readAsDataURL(file); }); await perform('workspace.import', { folder, name: file.name, data }); } catch (error) { notifyError(error); } } }} samples={snapshot?.samples || EMPTY} onImportSample={importSample} onSampleInstrument={samplePath => void perform('document.new', { samplePath })} files={snapshot?.files || EMPTY} query={filter} activePath={documentState?.path || ''} connected={connected} workspaceId={snapshot?.workspaceId} onOpen={path => void perform('document.open', { path })}/><div className="explorer-bottom"><button className="text-button" disabled={!connected} onClick={exportPackage}><Icon name="export" size={14}/> Export instrument</button><div className="explorer-note">Code is the instrument.<br/>Listen at every step.</div></div></aside>
       {showExplorer && <ResizeHandle label="Resize explorer" orientation="vertical" controls="explorer-panel" value={widths.left} min={widths.minLeft} max={Math.min(520, widths.budget - widths.right)} defaultValue={LAYOUT.leftWidth} onReset={() => setLeftWidth(LAYOUT.leftWidth)} onChange={setLeftWidth}/>}
       <section className="instrument-panel"><div className="document-toolbar"><div className="workspace-instrument"><Icon name="sound" size={15}/><span>{documentState ? basename(documentState.path) : 'No instrument'}</span><small>{instrumentReady ? 'ACTIVE INSTRUMENT' : 'WORKSPACE'}</small></div><div className="spacer"/><button className="icon-button" disabled={!connected || typing} title="Undo · ⌘ Z" onClick={editorProps.onUndo}><Icon name="undo" size={14}/></button><button className="icon-button" disabled={!connected || typing} title="Redo · ⌘ ⇧ Z" onClick={editorProps.onRedo}><Icon name="redo" size={14}/></button><span className="small-divider"/><button className={`icon-button ${split === 'vertical' ? 'selected' : ''}`} title="Split side by side · ⌘ \" onClick={() => splitEditors('vertical')}><Icon name="split" size={15}/></button><button className={`icon-button ${split === 'horizontal' ? 'selected' : ''}`} title="Split above and below" onClick={() => splitEditors('horizontal')}><Icon name="rows" size={15}/></button><button className={`icon-button ${macrosOpen ? 'selected' : ''}`} disabled={!instrumentReady} title="Host automation · export parameters" onClick={() => setMacrosOpen(!macrosOpen)}><Icon name="export" size={15}/></button><button className="icon-button" title="Rename instrument" disabled={!connected} onClick={() => { setRenameValue(basename(documentState?.path || 'Instrument.flows')); setRename(true); }}><Icon name="rename" size={14}/></button><button className="icon-button" title="Save · ⌘ S" disabled={!connected} onClick={editorProps.onSave}><Icon name="save" size={15}/></button><button className="compile-button" title="Compile · ⌘ Enter" disabled={!connected} onClick={() => void compile()}><Icon name="code" size={14}/> Compile <kbd>⌘ ↵</kbd></button></div>
       {error && <div className="error-banner"><span>{error}</span><div className="spacer"/>{conflict && <><button onClick={() => { session.reload(activeId); setError(''); }}>Reload native source</button><button onClick={() => { setError(''); void session.applyDraft(activeId).catch(notifyError); }}>Apply my draft</button></>}<button className="icon-button" title="Dismiss error" onClick={() => setError('')}><Icon name="close" size={13}/></button></div>}
@@ -428,7 +482,7 @@ export function App() {
           <div className={`editor-pane editor-group ${focusedGroup === index ? 'active' : ''}`} data-editor-group={index} id={index === 0 ? 'editor-first' : 'editor-second'} style={{ flex: `${split === 'none' ? 1 : index === 0 ? visibleSplitRatio : 1 - visibleSplitRatio} 1 0` }}>
             <div className="editor-group-tabs" role="tablist" aria-label={`Editor group ${index + 1}`}>
               {group.tabs.map(id => { const entry = session.document(id); if (!entry) return null; return <div className={`editor-tab ${group.active === id ? 'active' : ''}`} key={id} data-document-id={id} role="tab" aria-selected={group.active === id} tabIndex={group.active === id ? 0 : -1} title={entry.path} onClick={() => activate(index, id, true)} onKeyDown={event => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); activate(index, id, true); } }}><Icon name="code" size={13}/><span data-tab-label>{basename(entry.path)}</span>{session.dirty(id) && <i className="unsaved-dot"/>}<button className="tab-close icon-button" title={`Close ${basename(entry.path)}`} aria-label={`Close ${basename(entry.path)}`} onClick={event => { event.stopPropagation(); requestClose(index, id); }}><Icon name="close" size={12}/></button></div>; })}
-              <div className="spacer"/><span className="group-number" title={`Focus editor group ${index + 1} · ⌘ ${index + 1}`}>{index + 1}</span>
+              <div className="spacer"/><span className="group-number" title={`Focus editor group ${index + 1} · ${shortcutLabel(index === 0 ? 'focus-first' : 'focus-second', { mac, web })}`}>{index + 1}</span>
             </div>
             {group.tabs.map(id => {
               const entry = session.document(id); if (!entry) return null;
@@ -443,7 +497,7 @@ export function App() {
                   onUndo={() => { void perform('document.undo', {}, id); }} onRedo={() => { void perform('document.redo', {}, id); }} onSave={() => { void perform('document.save', {}, id); }} onCompile={() => { void perform('compile', {}, id); }}/>
               </div>;
             })}
-            {!group.active && <div className="empty-editor" onPointerDown={() => { focusedGroupRef.current = index; setFocusedGroup(index); }}><Icon name="code" size={34}/><h2>{connected ? 'Open an instrument' : 'Your sound starts here.'}</h2><p>{connected ? 'Choose a file from Explorer or create a new instrument.' : 'Open this editor inside Flows to connect audio.'}</p><button className="secondary-button" disabled={!connected} onClick={() => { focusedGroupRef.current = index; setFocusedGroup(index); void perform('document.new'); }}><Icon name="add" size={14}/> New instrument</button><small>⌘ \ split · ⌘ 1 / 2 focus group · ⌘ W close tab</small></div>}
+            {!group.active && <div className="empty-editor" onPointerDown={() => { focusedGroupRef.current = index; setFocusedGroup(index); }}><Icon name="code" size={34}/><h2>{connected ? 'Open an instrument' : 'Your sound starts here.'}</h2><p>{connected ? 'Choose a file from Explorer or create a new instrument.' : 'Open this editor inside Flows to connect audio.'}</p><button className="secondary-button" disabled={!connected} onClick={() => { focusedGroupRef.current = index; setFocusedGroup(index); void perform('document.new'); }}><Icon name="add" size={14}/> New instrument</button><small>{shortcutLabel('split', { mac, web })} split · {shortcutLabel('focus-first', { mac, web })} / {shortcutLabel('focus-second', { mac, web })} focus group · {shortcutLabel('close', { mac, web })} close tab</small></div>}
           </div>
         </div>;
       })}</div>
@@ -461,7 +515,8 @@ export function App() {
       onChange={async pattern => { const current = acknowledged.current; if (!current?.sequencer || (current.sequencer.ownerDocumentId || current.document.id) !== sequencerOwnerId) throw new Error('The sequencer pattern changed.'); if (current.document.id !== activeId || desiredDocument.current !== activeId) throw new Error('The active instrument changed.'); if (await perform('sequencer.set', { documentId: activeId, pattern, baseRevision: current.sequencer.revision }, activeId) === undefined) throw new Error('Could not update the pattern.'); }}
       onTempoChange={bpm => perform('transport.set', { bpm }, activeId)}
       onPlayingChange={playing => perform('sequencer.play', { documentId: activeId, playing }, activeId)}/>}
-    {settings && <div className="appearance-popover"><header><span>Appearance</span><button className="icon-button" title="Close appearance" onClick={() => setSettings(false)}><Icon name="close" size={14}/></button></header><label>Theme<select value={theme} onChange={event => setTheme(event.target.value)}><option value="moss">Moss</option><option value="graphite">Graphite</option><option value="paper">Paper</option></select></label><label>Editor font<input aria-label="Editor font family" value={fontFamily} list="editor-fonts" onChange={event => setFontFamily(event.target.value)} placeholder={DEFAULT_FONT}/><datalist id="editor-fonts"><option value={DEFAULT_FONT}/><option value="'JetBrains Mono', monospace"/><option value="'Fira Code', monospace"/><option value="Menlo, monospace"/><option value="Monaco, monospace"/></datalist></label><label>Interface text size <span>{Math.round(fontSize / 16 * 100)}%</span><input aria-label="Interface text size" type="range" min="10" max="32" step="1" value={fontSize} onChange={event => setFontSize(Number(event.target.value))}/></label><div className="font-shortcuts">⌘ / Ctrl + or − resizes all text · 0 resets to 100%</div><label>Background opacity <span>{windowTransparency ? `${Math.round(opacity * 100)}%` : 'Host opaque'}</span><input aria-label="Background opacity" disabled={!windowTransparency} type="range" min="0.7" max="1" step="0.01" value={windowTransparency ? opacity : 1} onChange={event => setOpacity(Number(event.target.value))}/></label><p>{windowTransparency ? 'Background layers become transparent. Text and signal cards stay opaque.' : 'This host does not support window transparency. Your opacity preference is retained for supported windows.'}</p></div>}
+    {settings && <div className="appearance-popover"><header><span>Appearance</span><button className="icon-button" title="Close appearance" onClick={() => setSettings(false)}><Icon name="close" size={14}/></button></header><label>Theme<select value={theme} onChange={event => setTheme(event.target.value)}><option value="moss">Moss</option><option value="graphite">Graphite</option><option value="paper">Paper</option></select></label><label>Editor font<input aria-label="Editor font family" value={fontFamily} list="editor-fonts" onChange={event => setFontFamily(event.target.value)} placeholder={DEFAULT_FONT}/><datalist id="editor-fonts"><option value={DEFAULT_FONT}/><option value="'JetBrains Mono', monospace"/><option value="'Fira Code', monospace"/><option value="Menlo, monospace"/><option value="Monaco, monospace"/></datalist></label><label>Interface text size <span>{Math.round(fontSize / 16 * 100)}%</span><input aria-label="Interface text size" type="range" min="10" max="32" step="1" value={fontSize} onChange={event => setFontSize(Number(event.target.value))}/></label><div className="font-shortcuts">{web ? 'Use this slider for the app’s text; ⌘ / Ctrl + or − zooms the whole page.' : '⌘ / Ctrl + or − resizes all text · 0 resets to 100%'}</div><label>Background opacity <span>{windowTransparency ? `${Math.round(opacity * 100)}%` : 'Host opaque'}</span><input aria-label="Background opacity" disabled={!windowTransparency} type="range" min="0.7" max="1" step="0.01" value={windowTransparency ? opacity : 1} onChange={event => setOpacity(Number(event.target.value))}/></label><p>{windowTransparency ? 'Background layers become transparent. Text and signal cards stay opaque.' : 'This host does not support window transparency. Your opacity preference is retained for supported windows.'}</p>{capabilities?.sourceUrl && <p className="about-line">Flows {capabilities.version} · <ExternalLink href={capabilities.sourceUrl}>Source code</ExternalLink> · AGPL-3.0</p>}</div>}
+    {audioPanel && <AudioSettings storageMode={capabilities?.storage} onClose={() => setAudioPanel(false)}/>}
     {closing && <div className="modal-backdrop"><div className="rename-dialog close-dialog" role="dialog" aria-modal="true" aria-label="Unsaved instrument"><h2>Save changes?</h2><p><strong>{basename(session.document(closing.id)?.path || 'Instrument')}</strong> has unsaved changes.</p><p>Closing without saving discards these changes.</p><div className="dialog-actions"><button className="secondary-button" data-close-action="cancel" disabled={closeBusy} onClick={() => setClosing(null)}>Cancel</button><button className="secondary-button" data-close-action="discard" disabled={closeBusy} onClick={() => void finishClose(closing.group, closing.id, 'discard')}>Discard</button><button autoFocus className="primary-button" data-close-action="save" disabled={closeBusy} onClick={() => void finishClose(closing.group, closing.id, 'save')}>Save</button></div></div></div>}
     {rename && <div className="modal-backdrop" onPointerDown={event => { if (event.target === event.currentTarget) setRename(false); }}><form className="rename-dialog" role="dialog" aria-modal="true" aria-label="Rename instrument" onSubmit={async event => { event.preventDefault(); const result = await perform('document.rename', { name: renameValue.trim() }); if (result !== undefined) setRename(false); }}><header><h2>Rename instrument</h2><button type="button" className="icon-button" title="Cancel rename" onClick={() => setRename(false)}><Icon name="close" size={15}/></button></header><label>Filename<input autoFocus value={renameValue} onChange={event => setRenameValue(event.target.value)} required maxLength={120} pattern="[^/\\\\]+"/></label><footer><button type="button" className="secondary-button" onClick={() => setRename(false)}>Cancel</button><button className="primary-button" disabled={!renameValue.trim()}>Rename</button></footer></form></div>}
     {macrosOpen && <Macros snapshot={snapshot} parameter={macroParameter} onClose={() => setMacrosOpen(false)} onResult={receive} onError={notifyError}/>}

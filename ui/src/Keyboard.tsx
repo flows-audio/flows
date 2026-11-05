@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
-import { request } from './native';
+import { request } from './client';
 
 const whiteSemitones = [0, 2, 4, 5, 7, 9, 11, 12, 14, 16, 17, 19, 21, 23];
 const blackSemitones = [1, 3, 6, 8, 10, 13, 15, 18, 20, 22];

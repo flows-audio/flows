@@ -9,7 +9,7 @@ import subprocess
 import os
 
 ROOT = Path(__file__).resolve().parents[1]
-EXCLUDED = {'.git', 'node_modules', '__pycache__', '.cache', '.local', 'dist'}
+EXCLUDED = {'.git', 'node_modules', '__pycache__', '.cache', '.local', 'dist', 'dist-web', 'test-results', 'playwright-report'}
 PATTERNS = {
     'credential': re.compile(r'sk-[A-Za-z0-9_-]{18,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----'),
     'personal_path': re.compile(r'/(?:Users|home)/[A-Za-z0-9_.-]+/'),

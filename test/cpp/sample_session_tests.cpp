@@ -1,6 +1,6 @@
-#include "host/app/RealtimeSession.hpp"
-#include "host/app/Analyzer.hpp"
-#include "host/app/DataflowGraph.hpp"
+#include "app/RealtimeSession.hpp"
+#include "app/Analyzer.hpp"
+#include "app/DataflowGraph.hpp"
 #include <algorithm>
 #include <array>
 #include <cstdlib>

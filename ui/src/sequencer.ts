@@ -1,25 +1,6 @@
-export interface SequencerStep { active: boolean; velocity: number; gate: number }
-export interface SequencerRow { note: number; mute: boolean; volume?: number; steps: SequencerStep[] }
-export type SequencerLeafSound = { kind: 'active' } | { kind: 'instrument'; path: string } | { kind: 'sample'; path: string; playback?: 'one_shot' | 'gated' };
-export type SequencerSound = SequencerLeafSound | { kind: 'lanes'; lanes: SequencerLeafSound[] };
-export interface SequencerPattern {
-  metronome?: { mute: boolean; division: number; volume: number };
-  sound?: SequencerSound;
-  length: 16 | 32;
-  division: 4 | 8 | 16 | 32;
-  swing: number;
-  direction: 'forward' | 'reverse' | 'pingpong' | 'random';
-  root: number;
-  scale: 'chromatic' | 'major' | 'minor' | 'pentatonic';
-  transpose: number;
-  rows: SequencerRow[];
-}
-export interface SequencerState extends SequencerPattern {
-  revision: number; playing: boolean; playhead?: number;
-  ownerDocumentId?: string;
-  soundStatus?: 'ready' | 'pending' | 'error';
-  soundError?: string;
-}
+import type { SequencerPattern } from './protocol.gen';
+export type { SequencerLeafSound, SequencerPattern, SequencerRow, SequencerSound, SequencerState, SequencerStep } from './protocol.gen';
+import type { SequencerLeafSound } from './protocol.gen';
 
 const SCALES = {
   major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], pentatonic: [0, 2, 4, 7, 9],

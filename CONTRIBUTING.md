@@ -31,6 +31,14 @@ implementation in tests. UI changes need visual verification. Audio changes
 need checks for event timing, release, finite output and block-size invariance
 where applicable, plus listening when the sound changes.
 
+Application behaviour lives in the portable core (`src/app`) and reaches the
+UI through `protocol/flows-protocol.json`. Hosts (`src/host/app` for JUCE,
+`src/web` and `ui/src/web` for the browser) implement platform services only.
+When you add or change a request, edit the protocol and run
+`npm run protocol --prefix ui`; when a host cannot support a feature, publish a
+capability and have the UI explain it rather than checking which host runs.
+See [docs/WEB.md](docs/WEB.md#keeping-the-hosts-together).
+
 Disk, compilation, network and analysis work stay outside the audio callback.
 Keep callback work bounded and avoid allocations, locks and blocking calls.
 Preserve voice identity, automation timing and observable DSP values.
@@ -48,7 +56,9 @@ local responsibilities; a green hosted build does not replace them.
 
 ## Platform contributions
 
-The desktop app currently targets macOS. Windows/Linux work should keep the
-compiler and DSP portable, put platform code behind small adapters, and include
-reproducible build instructions and platform test results. A successful core
-build alone does not establish desktop or DAW support.
+The desktop app currently targets macOS and the browser build runs the same
+core as WebAssembly. Windows/Linux work should keep the core portable,
+implement its ports (secrets, HTTP, audio decoding, parameters) in small
+adapters, and include reproducible build instructions and platform test
+results. A successful core build alone does not establish desktop or DAW
+support.

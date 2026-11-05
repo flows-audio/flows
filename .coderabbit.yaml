@@ -31,6 +31,8 @@ reviews:
     auto_pause_after_reviewed_commits: 0
   path_filters:
     - "!ui/package-lock.json"
+    - "!ui/src/protocol.gen.ts"
+    - "!licenses/third-party/**"
     - "!third_party/**"
     - "!**/*.png"
     - "!**/*.icns"
@@ -49,14 +51,35 @@ reviews:
         limits. Language changes must agree with examples, reference documentation,
         editor completion and host parameter metadata. Reject invalid programs
         without leaving the interface playing stale code.
+    - path: "src/app/**"
+      instructions: >-
+        Portable app core shared by every host; no JUCE or platform APIs.
+        Review audio/request/worker thread ownership, bounded queues, program
+        replacement, stale revisions, voice release and audition routing.
+        AudioRuntime runs in DAW callbacks and browser audio worklets: no locks,
+        allocation, IO, clocks or 64-bit size_t assumptions (wasm32). Preserve
+        unsaved documents. For AI and imports, check path confinement, explicit
+        user intent, secret redaction and stale edits. Saving must not select the
+        sounding program; the current valid editor source does.
     - path: "src/host/app/**"
       instructions: >-
-        Review audio/message/worker thread ownership, bounded queues, program
-        replacement, stale revisions, voice release and audition routing. Preserve
-        unsaved documents and isolate tests from real workspaces, keychains and
-        audio devices. For AI and imports, check path confinement, explicit user
-        intent, secret redaction and stale edits. Saving must not select the
-        sounding program; the current valid editor source does.
+        JUCE adapter around the portable core: buffers, MIDI, host automation,
+        state, Keychain, dialogs and the WebView bridge. Check conversions at the
+        juce::var boundary, editor/message-thread ownership and that platform
+        behaviour reaches the core through its ports rather than new logic here.
+        Isolate tests from real workspaces, keychains and audio devices.
+    - path: "src/web/**"
+      instructions: >-
+        Browser host. The page's main thread serves requests; pthreads compile
+        and analyse; the audio worklet is a Wasm Worker sharing memory. Check
+        that the worklet path stays lock-free, that main-thread waits cannot
+        deadlock with proxied file or fetch calls, and that malloc'd strings are
+        freed exactly once.
+    - path: "protocol/**"
+      instructions: >-
+        The UI/host contract. Changes must regenerate ui/src/protocol.gen.ts,
+        stay compatible for existing hosts (bump version only for breaking
+        changes) and be implemented by the core or every host that owns them.
     - path: "ui/src/**"
       instructions: >-
         Check UTF-16 offsets, CodeMirror virtualized lines and cursor alignment,

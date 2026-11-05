@@ -1,4 +1,4 @@
-#include "host/app/HostAutomation.hpp"
+#include "app/HostAutomation.hpp"
 #include <atomic>
 #include <array>
 #include <iostream>
