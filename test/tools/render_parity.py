@@ -76,6 +76,9 @@ def compare(case_id: str, native: Path, wasm: Path) -> str:
         raise AssertionError(f"{case_id}: capture tables differ in shape or columns")
     worst = 0.0
     for row_a, row_b in zip(rows_a[1:], rows_b[1:]):
+        # zip() would silently drop a field one core left out.
+        if len(row_a) != len(rows_a[0]) or len(row_b) != len(rows_b[0]):
+            raise AssertionError(f"{case_id}: a capture row's width differs from its header")
         for x, y in zip(row_a, row_b):
             try:
                 fx, fy = float(x), float(y)

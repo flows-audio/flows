@@ -347,11 +347,12 @@ void AppCore::configureWorkspace() {
         // Keep the bundled instrument, and move the drafts out of the next
         // checkpoint's way so they can still be recovered by hand.
         if (!problem.empty()) {
-            const auto kept = workspace_ / ".session.unreadable.flowsinst";
+            // A new name each time: an earlier unreadable file still holds its drafts.
+            const auto kept = files::nonexistentSibling(workspace_ / ".session.unreadable.flowsinst");
             emitLocked(json::object(
                 {{"status", "failed"},
                  {"error", "Unsaved work from the last session could not be restored (" + problem + ")." +
-                               (files::move(recoveryFile, kept) ? " It was kept as .session.unreadable.flowsinst." : "")}}));
+                               (files::move(recoveryFile, kept) ? " It was kept as " + kept.filename().string() + "." : "")}}));
         }
     }
     runtime_.bpm.store(preferences_["bpm"].asDouble());

@@ -54,13 +54,24 @@ int main(int argc, char** argv) {
                   "A readable recovery file was set aside");
         }
 
-        // An unreadable file is kept for recovery by hand and reported.
+        // An unreadable file is kept for recovery by hand and reported; a
+        // later one is kept beside it rather than replacing it.
+        const auto workspace = folder.path / "Workspace";
         files::writeAtomic(recoveryFile, "{ not recovery");
         {
             auto core = makeCore(folder.path, bundle, true);
-            const auto kept = folder.path / "Workspace" / ".session.unreadable.flowsinst";
-            check(files::tryRead(kept, 1024) == std::string("{ not recovery"), "Unreadable drafts were not kept aside");
-            check(reported(*core, "could not be restored"), "Unreadable drafts were not reported");
+            check(files::tryRead(workspace / ".session.unreadable.flowsinst", 1024) == std::string("{ not recovery"),
+                  "Unreadable drafts were not kept aside");
+            check(reported(*core, "kept as .session.unreadable.flowsinst"), "Unreadable drafts were not reported");
+        }
+        files::writeAtomic(recoveryFile, "{ also not recovery");
+        {
+            auto core = makeCore(folder.path, bundle, true);
+            check(files::tryRead(workspace / ".session.unreadable.flowsinst", 1024) == std::string("{ not recovery"),
+                  "A second unreadable file replaced the first");
+            check(files::tryRead(workspace / ".session.unreadable(2).flowsinst", 1024) == std::string("{ also not recovery"),
+                  "A second unreadable file was not kept under a new name");
+            check(reported(*core, "kept as .session.unreadable(2).flowsinst"), "The second file's name was not reported");
         }
         std::cout << "Recovery passed: large recovery restores drafts; unreadable recovery is kept and reported.\n";
         return 0;
