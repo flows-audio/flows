@@ -3,6 +3,7 @@
 // so the page reloads once after registering it. Hosts that send the headers
 // themselves are already isolated and never register the worker.
 const reloadKey = 'flows.isolationReload';
+const readyTimeoutMs = 10_000;
 
 function readFlag(): boolean {
   try { return sessionStorage.getItem(reloadKey) === '1'; } catch { return false; }
@@ -26,9 +27,15 @@ export async function isolateWithServiceWorker(): Promise<boolean> {
   if (readFlag()) return false;
   try {
     await navigator.serviceWorker.register(new URL('isolation.js', document.baseURI), { scope: './' });
-    await navigator.serviceWorker.ready;
+    // `ready` never settles when installation fails; give up instead of
+    // leaving the loading screen up.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error('the worker did not activate')), readyTimeoutMs);
+    });
+    try { await Promise.race([navigator.serviceWorker.ready, timeout]); } finally { clearTimeout(timer); }
   } catch (error) {
-    console.warn('Flows could not register its isolation service worker', error);
+    console.warn('Flows could not start its isolation service worker', error);
     return false;
   }
   if (!writeFlag(true)) return false;
