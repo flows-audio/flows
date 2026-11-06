@@ -25,18 +25,22 @@ export async function isolateWithServiceWorker(): Promise<boolean> {
   // One reload per tab session: if the worker did not isolate the page, report
   // the browser as unsupported instead of reloading forever.
   if (readFlag()) return false;
+  // Registration can stall and `ready` never settles when installation fails;
+  // one deadline covers both so the loading screen cannot stay up.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error('the worker did not activate')), readyTimeoutMs);
+  });
   try {
-    await navigator.serviceWorker.register(new URL('isolation.js', document.baseURI), { scope: './' });
-    // `ready` never settles when installation fails; give up instead of
-    // leaving the loading screen up.
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(() => reject(new Error('the worker did not activate')), readyTimeoutMs);
-    });
-    try { await Promise.race([navigator.serviceWorker.ready, timeout]); } finally { clearTimeout(timer); }
+    await Promise.race([(async () => {
+      await navigator.serviceWorker.register(new URL('isolation.js', document.baseURI), { scope: './' });
+      await navigator.serviceWorker.ready;
+    })(), timeout]);
   } catch (error) {
     console.warn('Flows could not start its isolation service worker', error);
     return false;
+  } finally {
+    clearTimeout(timer);
   }
   if (!writeFlag(true)) return false;
   location.reload();
