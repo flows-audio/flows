@@ -12,7 +12,7 @@ Flow and AI assistant all work with the same instrument source.
 *A saw oscillator through a lowpass filter, with probes before and after processing.*
 
 [Download the macOS preview](https://github.com/flows-audio/flows/releases/latest)
-· [Run it in a browser](docs/WEB.md)
+· [Open it in a browser](https://flows-audio.github.io/flows/)
 · [Language and instruments](docs/LANGUAGE.md)
 · [Architecture](docs/ARCHITECTURE.md)
 · [Source-guided learning](docs/learn/README.md)
@@ -67,8 +67,8 @@ does not silently replace your instrument.
 
 ## In a browser
 
-The same instrument runs in current Chrome, Edge, Firefox and Safari: the C++
-core is compiled to WebAssembly and plays through an audio worklet, with the
+Open <https://flows-audio.github.io/flows/>. The same instrument runs in
+current Chrome, Edge, Firefox and Safari: the C++ core is compiled to WebAssembly and plays through an audio worklet, with the
 same editor. The workspace is saved in the browser; export instrument packages
 to keep copies. Sound starts with your first key press or click. Web MIDI
 keyboards work where the browser supports them (not in Safari). See
