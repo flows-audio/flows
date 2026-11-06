@@ -67,11 +67,17 @@ Cloudflare Pages and Netlify read them from the bundled `_headers` file, which
 also sets long-lived caching for hashed assets. Without the headers the page
 explains that the browser refused shared memory instead of starting.
 
-GitHub Pages cannot send custom headers. A service-worker shim such as
-coi-serviceworker can add them after a reload, but it is a workaround: the
-first visit reloads, and some browsers or privacy settings block it. Prefer a
-host that supports headers for the editor, and keep the project site on
-GitHub Pages with a link to it.
+Hosts that cannot send headers, such as GitHub Pages, still work: the page
+registers `isolation.js`, a service worker that adds the headers to this site's
+responses, and reloads once. Private windows and some privacy settings block
+service workers; there the page explains that the browser is unsupported.
+Hosts that send the headers never register the worker. `e2e/pages.spec.ts`
+checks this setup in every test browser.
+
+The official site is published at <https://flows-audio.github.io/flows/> by
+`.github/workflows/pages.yml`. After "Build and test" passes on `main`, it
+deploys the browser build that run produced. Repository settings must set
+*Pages → Source* to *GitHub Actions*.
 
 The site is free software under AGPL-3.0-only. Anyone hosting it must offer
 users the corresponding source: the editor links to the matching tag

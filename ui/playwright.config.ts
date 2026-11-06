@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Browser smoke tests for the web build (npm run build:web first).
-const port = 4178;
+const port = 4178, pagesPort = 4179;
 export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,
@@ -10,11 +10,16 @@ export default defineConfig({
   workers: 1,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: { baseURL: `http://127.0.0.1:${port}/`, trace: 'retain-on-failure', viewport: { width: 1440, height: 900 } },
-  webServer: {
+  webServer: [{
     command: `npx vite preview --mode web --host 127.0.0.1 --port ${port} --strictPort`,
     url: `http://127.0.0.1:${port}/`,
     reuseExistingServer: !process.env.CI,
-  },
+  }, {
+    // GitHub Pages: a subpath and no isolation headers (e2e/pages.spec.ts).
+    command: `node e2e/pages-server.mjs ${pagesPort}`,
+    url: `http://127.0.0.1:${pagesPort}/flows/`,
+    reuseExistingServer: !process.env.CI,
+  }],
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'], viewport: { width: 1440, height: 900 }, launchOptions: { args: ['--autoplay-policy=no-user-gesture-required'] } } },
     { name: 'firefox', use: { ...devices['Desktop Firefox'], viewport: { width: 1440, height: 900 }, launchOptions: { firefoxUserPrefs: { 'media.autoplay.default': 0, 'media.autoplay.block-webaudio': false } } } },

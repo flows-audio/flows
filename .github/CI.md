@@ -74,5 +74,9 @@ that run's tested artifacts and verifies their checksums before uploading.
 Publishing rechecks the remote tag against the tested commit before uploading
 and before publishing. Administrators should also protect release tags against
 updates and deletion; workflow checks alone cannot prevent concurrent tag edits.
+**Publish web app** deploys <https://flows-audio.github.io/flows/> after
+**Build and test** passes on a push to `main`. It publishes that run's tested
+`web-site` artifact without rebuilding. Only this job can write to Pages, and
+it can also be run by hand to redeploy the latest passing build.
 No release is triggered by a PR, push or dependency update. Packages remain
 ad-hoc signed previews, not Apple-notarized distribution builds.

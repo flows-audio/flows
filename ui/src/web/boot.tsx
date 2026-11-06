@@ -7,6 +7,7 @@ import { setTransport } from '../client';
 import type { Capabilities } from '../protocol.gen';
 import { BootScreen } from './BootScreen';
 import { WebHost } from './host';
+import { isolateWithServiceWorker } from './isolation';
 import { claimWorkspace } from './locks';
 import { withStrings, type FlowsModule } from './module';
 import { flushWorkspace, mountWorkspace, releaseWorkspace, settingsPath, workspacePath } from './storage';
@@ -14,7 +15,7 @@ import { flushWorkspace, mountWorkspace, releaseWorkspace, settingsPath, workspa
 function unsupportedReason(): string | undefined {
   if (typeof WebAssembly !== 'object') return 'This browser has no WebAssembly.';
   if (!globalThis.crossOriginIsolated || typeof SharedArrayBuffer === 'undefined')
-    return 'This page was served without cross-origin isolation, which the audio engine needs to share memory with its audio thread. If you host Flows yourself, send the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers described in docs/WEB.md.';
+    return 'The audio engine needs a cross-origin isolated page to share memory with its audio thread, and this browser blocked the service worker that provides it (private windows and some privacy settings do). If you host Flows yourself, send the Cross-Origin-Opener-Policy and Cross-Origin-Embedder-Policy headers described in docs/WEB.md.';
   return undefined;
 }
 function applySavedTheme() {
@@ -28,6 +29,7 @@ export async function bootWeb(container: HTMLElement) {
   const root = createRoot(container);
   const show = (element: ReactElement) => root.render(element);
   show(<BootScreen kind="loading"/>);
+  if (await isolateWithServiceWorker()) return;
   const problem = unsupportedReason();
   if (problem) { show(<BootScreen kind="unsupported" detail={problem}/>); return; }
 
