@@ -17,3 +17,12 @@ updates:
       compatible-updates:
         patterns: ['*']
         update-types: [minor, patch]
+  - package-ecosystem: npm
+    directory: /embed
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 3
+    groups:
+      compatible-updates:
+        patterns: ['*']
+        update-types: [minor, patch]

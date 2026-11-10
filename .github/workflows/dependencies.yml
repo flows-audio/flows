@@ -25,6 +25,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: |
+            ui/package-lock.json
+            embed/package-lock.json
       - run: npm ci --prefix ui
       - run: npm audit --prefix ui --audit-level=high
+      - run: npm ci --prefix embed
+      - run: npm audit --prefix embed --audit-level=high

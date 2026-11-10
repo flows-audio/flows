@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Built-in themes</title>
+  <script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+  <style>
+    :root { color-scheme: light dark; }
+    body { margin: 0; font: 16px system-ui, sans-serif; display: grid; grid-template-columns: repeat(3, 1fr); min-height: 100vh; }
+    section { padding: 32px 24px; display: grid; align-content: start; gap: 12px; }
+    h2 { font-size: 14px; font-weight: 600; margin: 0; }
+    .none { background: Canvas; color: CanvasText; }
+    .glass { background: radial-gradient(circle at 20% 20%, #7fe3f0, transparent 55%), radial-gradient(circle at 80% 70%, #a78bfa, transparent 55%), #dfe8ff; color: #14213d; }
+    .studio { background: #d7d4cc; }
+    @media (prefers-color-scheme: dark) {
+      .glass { background: radial-gradient(circle at 20% 20%, #0f6c7a, transparent 55%), radial-gradient(circle at 80% 70%, #4c2f95, transparent 55%), #0e1222; color: #e8ecf7; }
+      .studio { background: #0b0c0e; }
+    }
+  </style>
+</head>
+<body>
+  <section class="none"><h2>theme="none"</h2><flows-instrument id="none" preset="soft-keys" octaves="1"></flows-instrument></section>
+  <section class="glass"><h2>theme="glass"</h2><flows-instrument id="glass" preset="glass-pad" theme="glass" octaves="1"></flows-instrument></section>
+  <section class="studio"><h2>theme="studio"</h2><flows-instrument id="studio" preset="pluck-bass" theme="studio" octaves="1" start="C2"></flows-instrument></section>
+</body>
+</html>

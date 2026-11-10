@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Styling hooks</title>
+  <script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+  <style>
+    body { font: 16px system-ui, sans-serif; color: rgb(20, 20, 20); background: rgb(255, 255, 255); width: 640px; margin: 24px; display: grid; gap: 24px; }
+    flows-instrument { --flows-key-height: 80px; }
+    /* Only #styled changes; #plain is the unstyled reference. */
+    #styled {
+      --flows-key-white: rgb(255, 0, 0);
+      --flows-accent: rgb(0, 160, 0);
+      --flows-font: Georgia, serif;
+      --flows-padding: 12px;
+      --flows-surface: rgb(250, 240, 200);
+    }
+    #styled::part(key-black) { background: rgb(0, 0, 255); }
+    #styled::part(panel) { border-radius: 30px; }
+    #styled::part(title) { text-transform: uppercase; }
+  </style>
+</head>
+<body>
+  <flows-instrument id="plain" preset="soft-keys" label="Plain" controls="none" scope="none" octaves="1"></flows-instrument>
+  <flows-instrument id="styled" preset="soft-keys" label="Styled" controls="none" scope="none" octaves="1">
+    <span slot="gate">Start</span>
+  </flows-instrument>
+</body>
+</html>

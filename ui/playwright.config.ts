@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // Browser smoke tests for the web build (npm run build:web first).
-const port = 4178, pagesPort = 4179;
+const port = 4178, pagesPort = 4179, embedPort = 4180;
 export default defineConfig({
   testDir: './e2e',
   timeout: 90_000,
@@ -18,6 +18,11 @@ export default defineConfig({
     // GitHub Pages: a subpath and no isolation headers (e2e/pages.spec.ts).
     command: `node e2e/pages-server.mjs ${pagesPort}`,
     url: `http://127.0.0.1:${pagesPort}/flows/`,
+    reuseExistingServer: !process.env.CI,
+  }, {
+    // Another site that embeds Flows from the Pages origin (e2e/embed.spec.ts).
+    command: `node e2e/embed-host.mjs ${embedPort} http://127.0.0.1:${pagesPort}/flows/embed/`,
+    url: `http://localhost:${embedPort}/fixtures/multi.html`,
     reuseExistingServer: !process.env.CI,
   }],
   projects: [

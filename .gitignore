@@ -31,3 +31,5 @@ ui/playwright-report/
 
 # Optional local producer-vault link; never publish personal notes.
 /producer
+embed/node_modules/
+embed/dist/

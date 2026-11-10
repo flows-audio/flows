@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Why a filter sweep sounds like a vowel · Field notes</title>
+  <meta name="description" content="A short note on lowpass filters, with a playable instrument.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&display=swap">
+  <!-- Flows Embed: one module script defines <flows-instrument> and friends. -->
+  <script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+  <style>
+    :root {
+      --paper: #f7f8fa; --ink: #1f2328; --muted: #5d6570; --rule: #d9dde3; --link: #1c5d99;
+      color-scheme: light dark;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --paper: #16191d; --ink: #e6e8eb; --muted: #9aa3ad; --rule: #2c3238; --link: #82b4e6; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 1.125rem/1.75 Literata, Georgia, serif; }
+    main { max-width: 38rem; margin: 0 auto; padding: 4.5rem 1.25rem 6rem; }
+    header { margin-bottom: 2.75rem; }
+    .site { font-size: 1rem; color: var(--muted); text-decoration: none; }
+    h1 { font-size: clamp(2rem, 6vw, 2.75rem); line-height: 1.15; font-weight: 600; margin: 1.5rem 0 .75rem; letter-spacing: -.01em; }
+    .byline { color: var(--muted); font-size: 1rem; margin: 0; }
+    p { margin: 0 0 1.4em; }
+    a { color: var(--link); }
+    em { font-style: italic; }
+    figure { margin: 2.75rem 0; padding: 1.5rem 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+    figcaption { margin-top: 1rem; font-size: .95rem; line-height: 1.55; color: var(--muted); }
+    /* The whole integration: borrow the article's link colour. Everything
+       else (font, text colour, dark mode) is inherited. */
+    flows-instrument { --flows-accent: var(--link); }
+    footer { margin-top: 4rem; font-size: .95rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <a class="site" href="#">Field notes</a>
+      <h1>Why a filter sweep sounds like a vowel</h1>
+      <p class="byline">A short note on lowpass filters</p>
+    </header>
+
+    <p>Say <em>ooo</em>, then slowly open your mouth into <em>aaa</em>. Your vocal cords did not change; the shape of your mouth decided which of their overtones got through. A lowpass filter does the same thing to a synthesizer: it keeps the low partials of a bright saw wave and lets the high ones go.</p>
+    <p>Play a chord below, then drag <em>Cutoff</em> while it rings. Lower values sound closed and round, like <em>ooo</em>. Raise <em>Resonance</em> and the edge of the filter starts to sing on its own pitch, which is the moment a sweep starts to sound like a voice.</p>
+
+    <figure>
+      <flows-instrument id="demo" preset="soft-keys" label="Soft keys" controls="filtered.cutoff, filtered.resonance, amp.R"
+                        start="C3" octaves="2" code></flows-instrument>
+      <figcaption>The code is the instrument. Hold a chord and drag <code>cutoff: 2.4khz</code> sideways, or type a new value. Click or tap the keys, or focus the keyboard and use A–K on your computer keyboard. The instrument runs in your browser; nothing is sent anywhere.</figcaption>
+    </figure>
+
+    <p>Filters are where most of a sound's character lives. The oscillator decides what raw material exists; the filter decides how much of it you hear, and its envelope decides how that changes over the life of a note.</p>
+
+    <footer>The instrument is <a href="https://github.com/flows-audio/flows">Flows</a>, embedded with a single script tag.</footer>
+  </main>
+</body>
+</html>

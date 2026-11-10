@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ren Okada · Small instruments for the web</title>
+  <meta name="description" content="A personal site with a playable glass instrument.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,750&display=swap">
+  <!-- Flows Embed as a classic script: defines the elements and window.Flows. -->
+  <script src="https://flows-audio.github.io/flows/embed/flows-embed.iife.js" defer></script>
+  <style>
+    :root {
+      --ink: #14213d; --ink-soft: #3e4a66; --sky: #eef4ff;
+      --aqua: #7fe3f0; --violet: #a78bfa; --peach: #ffb4a2;
+      --glass: rgba(255, 255, 255, .28); --edge: rgba(255, 255, 255, .62);
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--sky); }
+    body {
+      margin: 0; min-height: 100vh; color: var(--ink);
+      font: 400 1.0625rem/1.6 "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+      overflow-x: hidden;
+    }
+    /* Colour fields under the glass; they drift unless motion is reduced. */
+    .fields { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: linear-gradient(160deg, #f6f9ff 0%, #e7efff 100%); }
+    .fields i { position: absolute; border-radius: 50%; filter: blur(60px); opacity: .85; animation: drift 24s ease-in-out infinite alternate; }
+    .fields i:nth-child(1) { width: 46vmax; height: 46vmax; left: -12vmax; top: -10vmax; background: var(--aqua); }
+    .fields i:nth-child(2) { width: 40vmax; height: 40vmax; right: -10vmax; top: 18vh; background: var(--violet); animation-duration: 30s; }
+    .fields i:nth-child(3) { width: 34vmax; height: 34vmax; left: 22vw; bottom: -16vmax; background: var(--peach); animation-duration: 36s; }
+    @keyframes drift { to { transform: translate3d(6vmax, 4vmax, 0) scale(1.08); } }
+    @media (prefers-reduced-motion: reduce) { .fields i { animation: none; } }
+
+    nav {
+      position: sticky; top: 16px; z-index: 2; margin: 16px auto 0; width: min(560px, calc(100% - 32px));
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px 10px 20px; border-radius: 999px;
+      background: var(--glass); border: 1px solid var(--edge);
+      -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8), 0 10px 30px -14px rgba(20, 33, 61, .35);
+    }
+    nav strong { font-weight: 750; letter-spacing: -.01em; }
+    nav a { color: var(--ink); text-decoration: none; padding: 6px 12px; border-radius: 999px; }
+    nav a:hover { background: rgba(255, 255, 255, .45); }
+
+    main { width: min(1040px, calc(100% - 32px)); margin: 0 auto; padding: 72px 0 96px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 48px; }
+    .intro { max-width: 34rem; }
+    h1 { font-size: clamp(2.6rem, 7vw, 4.6rem); line-height: .98; font-weight: 750; letter-spacing: -.035em; margin: 0 0 18px; }
+    .intro p { font-size: 1.2rem; color: var(--ink-soft); margin: 0; }
+
+    /* --- The instrument, in the same glass as the nav ------------------ */
+    flows-instrument {
+      --flows-font: inherit;
+      --flows-text: var(--ink);
+      --flows-muted: var(--ink-soft);
+      --flows-accent: #5b5bf7;
+      --flows-glow: rgba(91, 91, 247, .45);
+      --flows-radius: 34px;
+      --flows-padding: clamp(18px, 3vw, 28px);
+      --flows-gap: 20px;
+      --flows-key-height: 128px;
+      --flows-key-radius: 14px;
+      --flows-knob-size: 58px;
+      --flows-scope-height: 96px;
+      --flows-scope-line-width: 2.5;
+      max-width: 760px;
+    }
+    flows-instrument::part(panel) {
+      background: linear-gradient(145deg, rgba(255, 255, 255, .5), rgba(255, 255, 255, .14) 55%, rgba(255, 255, 255, .26));
+      border: 1px solid var(--edge);
+      box-shadow:
+        inset 0 1.5px 0 rgba(255, 255, 255, .9),
+        inset 0 -14px 28px -18px rgba(91, 91, 247, .35),
+        0 30px 60px -28px rgba(20, 33, 61, .45);
+    }
+    flows-instrument::part(title) { font-size: 1.25rem; font-weight: 750; letter-spacing: -.01em; }
+    flows-instrument::part(gate-button) {
+      background: rgba(255, 255, 255, .55); border-color: rgba(255, 255, 255, .9);
+      box-shadow: inset 0 1px 0 #fff, 0 6px 18px -8px rgba(91, 91, 247, .6);
+    }
+    .deck { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px 28px; align-items: center; }
+    .deck flows-keys { grid-column: 1 / -1; }
+    .knobs { display: grid; grid-template-columns: repeat(2, auto); gap: 14px 22px; }
+    flows-scope::part(scope) {
+      background: linear-gradient(180deg, rgba(255, 255, 255, .45), rgba(255, 255, 255, .12));
+      border: 1px solid rgba(255, 255, 255, .7);
+      box-shadow: inset 0 2px 10px rgba(20, 33, 61, .08);
+    }
+    flows-knob::part(knob-dial) {
+      background: radial-gradient(circle at 34% 28%, #fff, rgba(255, 255, 255, .35) 62%, rgba(255, 255, 255, .15));
+      box-shadow: inset 0 -3px 8px rgba(91, 91, 247, .22), 0 8px 16px -10px rgba(20, 33, 61, .55);
+    }
+    flows-knob::part(knob-track) { stroke: rgba(20, 33, 61, .12); }
+    flows-knob::part(knob-label) { font-weight: 600; }
+    flows-keys::part(keys) { gap: 6px; }
+    flows-keys::part(key-white) {
+      margin-left: 0; border-radius: 14px; border-color: rgba(255, 255, 255, .85);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .78), rgba(255, 255, 255, .34));
+      box-shadow: inset 0 1px 0 #fff, 0 10px 18px -14px rgba(20, 33, 61, .6);
+      -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    }
+    flows-keys::part(key-black) {
+      border-radius: 0 0 10px 10px; border-color: rgba(20, 33, 61, .2);
+      background: linear-gradient(180deg, rgba(20, 33, 61, .82), rgba(62, 74, 102, .72));
+    }
+    flows-keys::part(key-pressed) {
+      background: linear-gradient(180deg, rgba(167, 139, 250, .95), rgba(91, 91, 247, .8));
+      box-shadow: 0 0 26px rgba(91, 91, 247, .55);
+    }
+    @media (max-width: 640px) {
+      .deck { grid-template-columns: 1fr; }
+      .knobs { grid-template-columns: repeat(4, auto); justify-content: space-between; }
+      flows-instrument { --flows-knob-size: 48px; --flows-key-height: 112px; }
+    }
+
+    .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; max-width: 760px; }
+    .notes article {
+      padding: 18px 20px; border-radius: 22px; background: rgba(255, 255, 255, .22); border: 1px solid rgba(255, 255, 255, .55);
+      -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+    }
+    .notes h2 { font-size: 1.05rem; margin: 0 0 4px; }
+    .notes p { margin: 0; color: var(--ink-soft); font-size: .98rem; }
+  </style>
+</head>
+<body>
+  <div class="fields" aria-hidden="true"><i></i><i></i><i></i></div>
+  <nav aria-label="Site"><strong>Ren Okada</strong><span><a href="#play">Play</a><a href="#work">Work</a></span></nav>
+  <main>
+    <section class="intro">
+      <h1>Small instruments for the web.</h1>
+      <p>I build playable sound toys that live inside ordinary pages. This one is a slow glass pad; hold a chord and let it breathe.</p>
+    </section>
+
+    <!-- Custom layout: the page decides what goes where. -->
+    <flows-instrument id="play" preset="glass-pad" theme="glass">
+      <span slot="title">Glass pad</span>
+      <span slot="gate">Touch to wake it</span>
+      <div class="deck">
+        <flows-scope></flows-scope>
+        <div class="knobs">
+          <flows-knob param="cutoff" label="Shimmer"></flows-knob>
+          <flows-knob param="resonance" label="Ring"></flows-knob>
+          <flows-knob param="amp.A" label="Swell"></flows-knob>
+          <flows-knob param="amp.R" label="Tail"></flows-knob>
+        </div>
+        <flows-keys start="C3" octaves="2"></flows-keys>
+      </div>
+    </flows-instrument>
+
+    <section class="notes" id="work" aria-label="Recent work">
+      <article><h2>Rain organ</h2><p>A drone that follows the weather where you are.</p></article>
+      <article><h2>Pocket choir</h2><p>Four voices that harmonise whatever you hum.</p></article>
+      <article><h2>Glass pad</h2><p>The instrument above, written in Flows.</p></article>
+    </section>
+  </main>
+</body>
+</html>

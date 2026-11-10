@@ -84,6 +84,97 @@ users the corresponding source: the editor links to the matching tag
 (*Appearance → Source code*), and the release ZIP includes `LICENSE`,
 `SOURCE.txt` and third-party notices.
 
+## Embedding Flows in other sites
+
+**Flows Embed** (`embed/`, published at
+<https://flows-audio.github.io/flows/embed/> and prepared as the npm package
+`@flows-audio/embed`) puts a playable instrument, and the Flows code that
+defines it, on any page:
+
+```html
+<script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+<flows-instrument preset="soft-keys" theme="glass" code></flows-instrument>
+```
+
+`<flows-code>` is a small editor of its own (a textarea over highlighted text,
+no editor library): edits recompile when typing pauses, literals that set a
+parameter can be dragged while a note sounds, and knobs write their values
+back into the code. The compiler reports each parameter's source span and a
+structure key (`dsp_structure_key`); when a new source differs only in live
+values, the page applies them in place and the AudioWorklet keeps its engine
+and voices, as the app does.
+
+The [integration guide](../embed/skill/SKILL.md) is written for site authors
+and coding agents (it is a Claude Code skill): when to use it, the three
+layers, how to match a host site's design, every `--flows-*` variable and
+`::part()`, framework snippets and browser audio rules. The
+[examples](../embed/examples/) are the guide's test pages.
+
+### Three layers
+
+| Layer | Module | What it is |
+| --- | --- | --- |
+| Engine | `flows-embed-core.js` | `Flows.create({ source \| preset \| src })`, notes, parameters, analyser, events. No interface. |
+| Elements | `flows-embed.js` / `flows-embed.iife.js` | `<flows-instrument>`, `<flows-keys>`, `<flows-knob>`, `<flows-controls>`, `<flows-scope>`, `<flows-play-gate>` in Shadow DOM. |
+| Appearance | (CSS) | `--flows-*` custom properties, `::part()` names and slots. `theme="none"` (default) is transparent and inherits the page's font and colours; `glass` and `studio` are optional starting points. |
+
+### Why it does not need isolation
+
+An embed cannot ask the host for COOP/COEP headers or register a service
+worker, so it cannot use the app's shared memory or pthreads. It runs the same
+compiler and engine instead as a **single-threaded WebAssembly module inside
+the AudioWorklet**:
+
+- `embed/native/EmbedHost.cpp` wraps `flows::compile` and `flows::Engine`
+  (`src/compiler`, `src/engine`) in a small C API. It is built as a standalone
+  `.wasm` with no Emscripten JavaScript runtime; its only imports are four
+  trivial WASI/env stubs, so the same small wrapper (`embed/src/wasm.ts`)
+  runs it on the page, in the worklet and in Node.
+- The page compiles once to list parameters and report diagnostics. Each
+  instrument gets its own `AudioWorkletNode` and its own module instance and
+  memory, which compiles the source again and renders. All instruments on a
+  page share one `AudioContext`.
+- The alternative, compiling on the page and sending the compiled program to
+  the worklet, was rejected: `flows::Program` has no serialised form, and
+  adding one would create a second representation of the instrument that
+  could drift from the compiler. Compiling in the worklet costs well under a
+  millisecond for typical instruments (about 10 ms the first time while the
+  WebAssembly warms up) and happens before the node renders.
+- The engine and compiler are compiled again without `-pthread` (an object
+  with atomics cannot link into a module without shared memory). The DSP
+  engine keeps `-O3`; the compiler and host use `-Oz`.
+
+Download: about 24 KB gzip of JavaScript and 142 KB gzip (118 KB brotli) of
+WebAssembly; `npm run build --prefix embed` prints the exact sizes. The worklet
+is inlined as a Blob URL so it never needs a cross-origin worklet fetch; pages
+whose content security policy blocks `blob:` scripts load the hosted
+`flows-embed-worklet.js` instead. GitHub Pages serves every file with
+`Access-Control-Allow-Origin: *`, so scripts, the `.wasm` and presets load
+from any origin. The app's isolation service worker leaves `embed/` alone, so
+the example pages here behave like any other site.
+
+### Building and testing
+
+```sh
+emcmake cmake --preset web && cmake --build --preset web --target flows_embed
+npm ci --prefix embed && npm run build --prefix embed   # embed/dist
+ctest --preset web -R embed                             # SSR import, units, render parity
+npm run build:web --prefix ui                           # the site, with embed/ inside
+npx --prefix ui playwright test e2e/embed.spec.ts       # cross-origin, all browsers
+```
+
+- `embed_render_parity` renders every audio test case and every shipped preset
+  through the worklet's JavaScript wrapper and requires the same PCM16 output
+  as the native `flows` CLI (configure with `-DFLOWS_NATIVE_CLI`).
+- `e2e/embed.spec.ts` serves the examples from another origin with no
+  isolation headers (`e2e/embed-host.mjs`) and loads the embed from the Pages
+  stand-in. It checks that instruments start and sound after a click, that two
+  instruments share a context but not notes or parameters, that variables,
+  parts and slots change real screenshots, keyboard and ARIA use, the
+  built-in themes in light and dark mode, the CSP fallback and compile errors.
+- The npm package is prepared but not yet published; `embed/package.json`
+  carries the version of the app.
+
 ## Browser support
 
 | Feature | Chrome / Edge | Firefox | Safari |

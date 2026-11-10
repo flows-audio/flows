@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Flows Embed</title>
+  <meta name="description" content="Put a playable Flows instrument on any web page and style it like the page.">
+  <script type="module" src="../flows-embed.js"></script>
+  <style>
+    :root { color-scheme: light dark; --ink: #1d2433; --muted: #5b6475; --paper: #fbfcfe; --line: #dfe3ea; --accent: #2f6fdf; }
+    @media (prefers-color-scheme: dark) { :root { --ink: #e7eaf0; --muted: #9aa3b2; --paper: #12151b; --line: #2a303a; --accent: #8db4ff; } }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 1.0625rem/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+    main { max-width: 44rem; margin: 0 auto; padding: 4rem 1.25rem 5rem; }
+    h1 { font-size: 2.4rem; line-height: 1.1; margin: 0 0 .5rem; letter-spacing: -.02em; }
+    h2 { font-size: 1.2rem; margin: 2.5rem 0 .5rem; }
+    p, li { color: var(--muted); }
+    a { color: var(--accent); }
+    pre { background: color-mix(in srgb, var(--ink) 6%, transparent); padding: 1rem; border-radius: 10px; overflow-x: auto; font-size: .9rem; color: var(--ink); }
+    flows-instrument { --flows-accent: var(--accent); margin: 2rem 0; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Flows Embed</h1>
+    <p>A playable <a href="https://github.com/flows-audio/flows">Flows</a> instrument for any web page. It needs no special server headers, and every colour, corner and font can come from your site.</p>
+    <flows-instrument preset="soft-keys" label="Soft keys"></flows-instrument>
+    <h2>Add it to a page</h2>
+<pre>&lt;script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"&gt;&lt;/script&gt;
+&lt;flows-instrument preset="soft-keys"&gt;&lt;/flows-instrument&gt;</pre>
+    <h2>Examples</h2>
+    <ul>
+      <li><a href="minimal-blog.html">Minimal blog</a>: no styling at all; the instrument takes the article's font and colours.</li>
+      <li><a href="liquid-glass.html">Liquid glass</a>: a custom layout restyled with parts to match a glass personal site.</li>
+      <li><a href="dark-portfolio.html">Dark portfolio</a>: the engine alone, driven by the page's own pads, sliders and visuals.</li>
+    </ul>
+    <h2>Documentation</h2>
+    <p>The <a href="../skill/SKILL.md">integration guide</a> covers the three layers, every <code>--flows-*</code> variable and part, framework snippets and browser audio rules. It doubles as a skill for coding agents.</p>
+  </main>
+</body>
+</html>

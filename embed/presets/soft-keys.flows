@@ -1,0 +1,25 @@
+# Soft keys: a warm, playable default for embedded instruments.
+import standard as std
+from lib.osc import ClassicSaw, ClassicSine
+from lib.filt import ClassicFilt
+from lib.env import ClassicADSR
+
+class Tone(ClassicFilt):
+    def init:
+        self.register_knob(cutoff, default=2.4khz, range=(120hz, 12khz), step=10hz, scale=log, update=live)
+        self.register_knob(resonance, default=0.2, range=(0, 0.9), step=0.01)
+
+Inst.sigstream(std.event.keys.poly()) as key:
+    saw = ClassicSaw.make()
+    sine = ClassicSine.make()
+    tone = Tone.make()
+    env = ClassicADSR.make()
+
+    body = saw(pitch: key.pitch, level: -20db, unison: 3, detune: 9, spread: 0.6)
+    sub = sine(pitch: key.pitch, octave: -1, level: -16db)
+    filtered = tone(body + sub, mode: lowpass, cutoff: 2.4khz, resonance: 0.2)
+    amp = env(
+        gate: key.gate, trigger: key.trigger, retrigger_from: current,
+        A: 4ms, D: 420ms, S: 0.55, R: 380ms
+    )
+    return filtered * amp * key.velocity
