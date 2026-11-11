@@ -14,7 +14,9 @@ export function pickFile(accept: string): Promise<File | null> {
     let settled = false;
     const finish = (file: File | null) => { if (settled) return; settled = true; input.remove(); resolve(file); };
     input.addEventListener('change', () => finish(input.files?.[0] ?? null));
-    input.addEventListener('cancel', () => finish(null));
+    // A cancel can precede the change that carries the file (Firefox under
+    // automation does this), so a later change still wins.
+    input.addEventListener('cancel', () => setTimeout(() => finish(null), 500));
     document.body.append(input);
     input.click();
   });
