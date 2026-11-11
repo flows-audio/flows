@@ -1,31 +1,133 @@
+<div align="center">
+
+<img src="assets/flows-icon.png" width="120" alt="Flows">
+
 # Flows
 
-**Build a sound in code. Listen, observe and compare at every step.**
+### Code you can play.
 
-Flows is an experimental synthesizer where source code defines the instrument.
-Name an intermediate signal, attach a `probe`, and hear or inspect what a
-processing stage actually changes. The code editor, parameter controls, Signal
-Flow and AI assistant all work with the same instrument source.
+An open-source synthesizer where the source code **is** the instrument.<br>
+Write a sound, hear every stage of it, and play it on your Mac, in a browser tab,<br>
+or inside any web page.
 
-![Flows showing instrument source, parameter controls and live signal analysis](docs/images/flows.png)
+[![Build and test](https://github.com/flows-audio/flows/actions/workflows/ci.yml/badge.svg)](https://github.com/flows-audio/flows/actions/workflows/ci.yml)
+[![Web app](https://github.com/flows-audio/flows/actions/workflows/pages.yml/badge.svg)](https://flows-audio.github.io/flows/)
+[![Release](https://img.shields.io/github/v/release/flows-audio/flows?label=macOS%20preview)](https://github.com/flows-audio/flows/releases/latest)
+[![License](https://img.shields.io/badge/license-AGPL--3.0%20%2F%20Apache--2.0-blue)](#license)
 
-*A saw oscillator through a lowpass filter, with probes before and after processing.*
+**[Download for macOS](https://github.com/flows-audio/flows/releases/latest)**
+&nbsp;·&nbsp; **[Open in your browser](https://flows-audio.github.io/flows/)**
+&nbsp;·&nbsp; **[Put one on your page](embed/README.md)**
 
-[Download the macOS preview](https://github.com/flows-audio/flows/releases/latest)
-· [Open it in a browser](https://flows-audio.github.io/flows/)
-· [Language and instruments](docs/LANGUAGE.md)
-· [Architecture](docs/ARCHITECTURE.md)
-· [Source-guided learning](docs/learn/README.md)
+<br>
 
-## Interface text size
+<img src="docs/images/flows.png" alt="Flows on macOS: instrument source, live signal flow with probes, the assistant and a piano keyboard" width="100%">
 
-**Cmd/Ctrl +**, **Cmd/Ctrl −** and **Cmd/Ctrl 0** resize or reset text throughout
-the interface: editor, Explorer, assistant, Signal Flow, sequencer and menus.
-Appearance → **Interface text size** controls the same saved preference.
-The default is 100% (14px in the editor); other text keeps its relative size.
-**Editor font** still selects the code typeface independently.
+</div>
 
-## Try it
+<br>
+
+Most synthesizers hide the instrument behind knobs. In Flows the instrument is a
+few lines of code, and everything else — the knobs, the signal flow, the scopes,
+the assistant — is a view of that code. Name an intermediate signal, attach a
+`probe`, and you can hear and see exactly what a filter, an envelope or a
+formula changed. Drag a number in the code while a note sounds and the sound
+follows.
+
+## One engine, three places to play
+
+The same C++ compiler and DSP engine run in all three, so an instrument sounds
+the same wherever it plays.
+
+<table>
+<tr>
+<td width="33%" valign="top">
+
+### Flows for macOS
+
+<img src="docs/images/flows.png" alt="The Flows app on macOS">
+
+The full workspace: tabs and split editors, the Signal Flow, probes, the step
+sequencer, MIDI keyboards, AU/VST3 builds and an optional assistant.
+
+**[Download the preview](https://github.com/flows-audio/flows/releases/latest)**
+
+</td>
+<td width="33%" valign="top">
+
+### Flows in the browser
+
+<img src="docs/images/flows-browser.png" alt="Flows running in a browser tab">
+
+The same editor in a tab, nothing to install. The C++ core runs as
+WebAssembly in an audio worklet; your workspace stays in the browser.
+
+**[Open it now](https://flows-audio.github.io/flows/)**
+
+</td>
+<td width="33%" valign="top">
+
+### Flows Embed
+
+<img src="docs/images/flows-embed-glass.jpg" alt="A Flows instrument embedded in a web page">
+
+A playable instrument, and the code that makes it, on any web page from one
+script tag. Readers play it, turn its knobs and edit its code. It takes the
+page's own look.
+
+**[Embed one](embed/README.md)**
+
+</td>
+</tr>
+</table>
+
+## Put an instrument on your page
+
+```html
+<script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+<flows-instrument preset="soft-keys" code></flows-instrument>
+```
+
+<p align="center">
+<img src="docs/images/flows-embed-code.png" alt="An embedded Flows instrument with its code, a scope, knobs and keys" width="720">
+</p>
+
+The code above the keys is live. Typing recompiles when you pause, numbers can
+be dragged while a note sounds, knobs write their values back into the code,
+and Reset brings back the original. Click a key and the computer keyboard plays
+along while the mouse shapes the sound. Flows Embed needs no special server
+headers or service worker, and every part can be restyled with `--flows-*`
+properties and `::part()`. See the [live examples](https://flows-audio.github.io/flows/embed/)
+and the [integration guide](embed/skill/SKILL.md), which also works as a skill
+for coding agents.
+
+## Why Flows
+
+- **The code is the instrument.** Oscillators, filters, envelopes and your own
+  formulas, in a small language made for sound. Every number that sets a
+  parameter is also a control.
+- **Hear and see every step.** `probe` any signal to look at its waveform,
+  spectrum or power, compare `before - after`, or listen to that point alone.
+- **Edits that keep playing.** Changing a value updates the running engine in
+  place; held notes keep sounding.
+- **One engine everywhere.** The macOS app, the browser app and Flows Embed run
+  the same C++ compiler and engine; Flows Embed is tested against the native
+  engine sample by sample.
+- **AI that proposes, never overwrites.** The assistant can explain, compile,
+  render and compare, and every source change waits for your Apply. It is
+  optional and uses your own endpoint.
+- **Open source.** The compiler, the DSP engine and Flows Embed are Apache-2.0;
+  the complete app is AGPL-3.0.
+
+<p align="center">
+<a href="docs/LANGUAGE.md">Language and instruments</a>
+&nbsp;·&nbsp; <a href="docs/ARCHITECTURE.md">Architecture</a>
+&nbsp;·&nbsp; <a href="docs/learn/README.md">Source-guided learning</a>
+&nbsp;·&nbsp; <a href="docs/WEB.md">Flows in the browser</a>
+&nbsp;·&nbsp; <a href="ROADMAP.md">Roadmap</a>
+</p>
+
+## Try it on macOS
 
 The downloadable preview runs on **Apple Silicon Macs**. Unzip `Flows.app`,
 move it to Applications and open it. The build targets macOS 11 or later;
@@ -65,6 +167,14 @@ and model in its global settings. Keys use macOS Keychain (in the browser they
 stay in the current tab only). Source proposals require Apply; the assistant
 does not silently replace your instrument.
 
+### Interface text size
+
+**Cmd/Ctrl +**, **Cmd/Ctrl −** and **Cmd/Ctrl 0** resize or reset text throughout
+the interface: editor, Explorer, assistant, Signal Flow, sequencer and menus.
+Appearance → **Interface text size** controls the same saved preference.
+The default is 100% (14px in the editor); other text keeps its relative size.
+**Editor font** still selects the code typeface independently.
+
 ## In a browser
 
 Open <https://flows-audio.github.io/flows/>. The same instrument runs in
@@ -74,20 +184,7 @@ to keep copies. Sound starts with your first key press or click. Web MIDI
 keyboards work where the browser supports them (not in Safari). See
 [Flows in the browser](docs/WEB.md) for hosting, shortcuts and limits.
 
-### On your own site
-
-[Flows Embed](embed/README.md) puts a playable instrument on any web page with
-one script tag, without special server headers, and lets the page restyle
-every part of it:
-
-```html
-<script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
-<flows-instrument preset="soft-keys"></flows-instrument>
-```
-
-See the [examples](https://flows-audio.github.io/flows/embed/) and the
-[integration guide](embed/skill/SKILL.md), which also works as a skill for
-coding agents.
+To put an instrument on your own page, see [Flows Embed](embed/README.md).
 
 ## A small instrument
 
@@ -140,6 +237,7 @@ instruments and comparisons.
 | [CodeMirror 6](https://codemirror.net/) + [Lezer](https://lezer.codemirror.net/) | Code editing and syntax highlighting, with Flows-specific completion and controls |
 | Canvas 2D + SVG | Signal plots and the flow diagram |
 | [Emscripten](https://emscripten.org/) / WebAssembly | The browser build: the same core, threads and an audio worklet |
+| Web Components + AudioWorklet | Flows Embed: the compiler and engine as one single-threaded module, restylable elements |
 
 CMake/Ninja build the C++ targets; Vite bundles the frontend. Dependency
 versions, notices and licenses are documented in [THIRD_PARTY.md](THIRD_PARTY.md).
@@ -153,6 +251,7 @@ versions, notices and licenses are documented in [THIRD_PARTY.md](THIRD_PARTY.md
 | Windows / Linux compiler and DSP | Linux CI build/tests passed; Windows builds are not yet verified |
 | Windows / Linux desktop app | Planned; the portable app core is ready, native window/WebView/credential adapters need work |
 | Browser | Static site built from each release; tested in Chromium, Firefox and WebKit |
+| Web pages (Flows Embed) | One script tag, no isolation headers; tested cross-origin in Chromium, Firefox and WebKit |
 
 The language and file formats may change. Effects run per voice; there is no
 global post-mix FX chain, wavetable editor or independent sample time-stretch.
