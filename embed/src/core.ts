@@ -400,12 +400,12 @@ export class Flows {
       get size() { return self.analyserNode?.fftSize ?? self.analyserSize; },
       waveform(into) {
         const out = into ?? new Float32Array(this.size);
-        if (self.analyserNode) self.analyserNode.getFloatTimeDomainData(out); else out.fill(0);
+        if (self.analyserNode) self.analyserNode.getFloatTimeDomainData(out as Float32Array<ArrayBuffer>); else out.fill(0);
         return out;
       },
       spectrum(into) {
         const out = into ?? new Float32Array(this.size / 2);
-        if (self.analyserNode) self.analyserNode.getFloatFrequencyData(out); else out.fill(-Infinity);
+        if (self.analyserNode) self.analyserNode.getFloatFrequencyData(out as Float32Array<ArrayBuffer>); else out.fill(-Infinity);
         return out;
       },
       level() {
