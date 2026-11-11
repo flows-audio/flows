@@ -69,7 +69,7 @@ WebAssembly in an audio worklet; your workspace stays in the browser.
 
 ### Flows Embed
 
-<img src="docs/images/flows-embed-glass.jpg" alt="A Flows instrument embedded in a web page">
+<img src="docs/images/flows-embed-glass.png" alt="A Flows instrument embedded in a web page">
 
 A playable instrument, and the code that makes it, on any web page from one
 script tag. Readers play it, turn its knobs and edit its code. It takes the
