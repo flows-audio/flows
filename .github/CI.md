@@ -58,7 +58,8 @@ there is no second maintainer available.
 ## Dependencies and releases
 
 Dependabot proposes weekly Actions and frontend updates. Compatible npm
-updates are grouped; major updates remain separate. The scheduled dependency
+updates are grouped. Dependabot skips major versions; those change APIs or
+tooling and are upgraded by hand in a focused change. The scheduled dependency
 audit catches newly disclosed high-severity advisories even without new commits.
 JUCE, Emscripten (emsdk tag and commit) and actionlint are pinned explicitly
 and reviewed when upgraded.
