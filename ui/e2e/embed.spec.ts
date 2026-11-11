@@ -337,6 +337,28 @@ test.describe('embed', () => {
     await expect.poll(() => peakOf(page, '#custom'), { timeout: 5_000 }).toBeGreaterThan(0.005);
   });
 
+  test('a note pressed while the instrument rebuilds keeps sounding until released', async ({ page, browserName }) => {
+    await visit(page, '/fixtures/code.html');
+    await ready(page, '#custom');
+    await startAudio(page, () => page.locator('#custom').getByRole('button', { name: 'C3', exact: true }).click(),
+      () => page.evaluate(() => (document.querySelector('#custom') as Instrument).flows.state), browserName);
+    const held = await page.evaluate(async () => {
+      const flows = (document.querySelector('#custom') as Instrument).flows;
+      flows.noteOn('A3');
+      // A structural change: the old engine and its A3 go. C4, pressed after the new engine
+      // was sent and before it is ready, plays in the new one and must stay held.
+      const port = flows.node.port as MessagePort;
+      const post = port.postMessage.bind(port);
+      port.postMessage = (message: { type: string }) => { post(message); if (message.type === 'load') flows.noteOn('C4'); };
+      await flows.load({ source: flows.source.replace('key.velocity', 'key.velocity * 0.5') });
+      port.postMessage = post;
+      return flows.heldNotes();
+    });
+    expect(held).toEqual([60]);
+    await page.evaluate(() => (document.querySelector('#custom') as Instrument).flows.noteOff('C4'));
+    expect(await page.evaluate(() => (document.querySelector('#custom') as Instrument).flows.heldNotes())).toEqual([]);
+  });
+
   test('Reset brings back the loaded code, and a knob scrolls its number into view', async ({ page }) => {
     await visit(page, '/fixtures/code.html');
     await ready(page, '#custom');

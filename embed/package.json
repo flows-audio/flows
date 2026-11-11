@@ -7,7 +7,7 @@
   "repository": { "type": "git", "url": "git+https://github.com/flows-audio/flows.git", "directory": "embed" },
   "homepage": "https://flows-audio.github.io/flows/embed/",
   "keywords": ["synthesizer", "web-audio", "audio-worklet", "webassembly", "web-components", "instrument"],
-  "sideEffects": ["./dist/flows-embed.js", "./dist/flows-embed.iife.js"],
+  "sideEffects": ["./dist/*.js"],
   "main": "./dist/flows-embed.js",
   "module": "./dist/flows-embed.js",
   "types": "./dist/types/index.d.ts",

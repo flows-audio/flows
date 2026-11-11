@@ -46,9 +46,10 @@ const humanize = (name: string) => LABELS[name] ?? name.replace(/[_-]+/g, ' ').r
 function inferredRange(p: ParameterInfo): [number, number, string, number] {
   const value = p.value;
   switch (p.unit) {
-    case 'hertz': return [20, 20000, 'log', 0];
+    // A range that holds the authored value; log needs a positive minimum.
+    case 'hertz': return value > 0 ? [Math.min(20, value), Math.max(20000, value), 'log', 0] : [Math.min(0, value), 20000, 'linear', 0];
     case 'seconds': return [0, Math.max(10, value * 2), 'offset_log', 0.001];
-    case 'decibels': return [-60, Math.max(12, value), 'decibels', 0];
+    case 'decibels': return [Math.min(-60, value), Math.max(12, value), 'decibels', 0];
     case 'pitch': return [0, 127, 'linear', 0];
     case 'boolean': return [0, 1, 'linear', 0];
     default: {

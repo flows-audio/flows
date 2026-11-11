@@ -275,7 +275,8 @@ export class FlowsCodeElement extends Base {
     const flows = this.flows;
     if (!flows) return Promise.resolve(false);
     const text = this.text, request = ++this.applying;
-    return flows.load({ source: text }).then(() => {
+    // Relative sample paths keep resolving against the instrument's src or preset, not the page.
+    return flows.load({ source: text, baseUrl: flows.baseUrl || undefined }).then(() => {
       if (request === this.applying) this.showProblems([]);
       this.emit({ source: text, ok: true, diagnostics: [] });
       return true;

@@ -168,7 +168,7 @@ async function resolveSource(options: FlowsSource): Promise<Resolved> {
   }
 }
 
-interface Compiled { info: ProgramInfo; parameters: FlowsParameter[]; samples: (ArrayBuffer | null)[]; source: string }
+interface Compiled { info: ProgramInfo; parameters: FlowsParameter[]; samples: (ArrayBuffer | null)[]; source: string; base: string }
 async function compileOnPage(resolved: Resolved): Promise<Compiled> {
   const { page } = await loadRuntime();
   const { handle, info } = page.compile(resolved.source);
@@ -176,7 +176,7 @@ async function compileOnPage(resolved: Resolved): Promise<Compiled> {
   if (!info.ok) throw new FlowsCompileError(info.diagnostics);
   const samples = await Promise.all((info.samples ?? []).map(async (path) =>
     (await fetchOk(new URL(path, resolved.base).href, `sample "${path}"`)).arrayBuffer()));
-  return { info, parameters: describeParameters(info.parameters ?? []), samples, source: resolved.source };
+  return { info, parameters: describeParameters(info.parameters ?? []), samples, source: resolved.source, base: resolved.base };
 }
 
 // --- Audio context --------------------------------------------------------
@@ -295,6 +295,8 @@ export class Flows {
   get output(): GainNode | null { return this.gain; }
   /** The compiled source text. */
   get source(): string { return this.compiled?.source ?? ''; }
+  /** Where the current instrument's relative sample paths resolve (its src or preset URL, else the page). */
+  get baseUrl(): string { return this.compiled?.base ?? ''; }
   get channels(): 1 | 2 { return this.compiled?.info.channels ?? 1; }
   get voiceMode(): 'poly' | 'mono' { return this.compiled?.info.voice ?? 'poly'; }
 
@@ -433,14 +435,20 @@ export class Flows {
       this.emit('load', { parameters: compiled.parameters, hot: true });
       return;
     }
+    // Notes held now end with the old engine. Notes pressed while it loads reach the new one
+    // (the worklet handles messages in order), so they stay held until their note-off.
+    const ending = new Map([...this.held].map(([pitch, note]) => [pitch, note.id]));
     if (this.node) {
       const request = this.nextRequest++;
       const done = new Promise<void>((resolve, reject) => this.requests.set(request, { resolve, reject }));
       this.send({ type: 'load', source: compiled.source, samples: compiled.samples.map(copyBuffer), request });
       await done;
     }
-    for (const pitch of [...this.held.keys()]) this.emit('note', { pitch, on: false, velocity: 0 });
-    this.held.clear();
+    for (const [pitch, id] of ending) {
+      if (this.held.get(pitch)?.id !== id) continue;
+      this.held.delete(pitch);
+      this.emit('note', { pitch, on: false, velocity: 0 });
+    }
     this.compiled = compiled;
     this.resetValues();
     this.emit('load', { parameters: compiled.parameters, hot: false });
@@ -514,7 +522,7 @@ export class Flows {
     if (this.node && !this.attaching) return Promise.resolve();
     this.attaching ??= this.createNode().then(
       () => { this.attaching = null; this.replay(); if (this.context?.state === 'running') this.setState('running'); else this.setState('suspended'); },
-      (error) => { this.attaching = null; this.fail(error as Error); throw error; });
+      (error) => { this.attaching = null; if (this.currentState !== 'disposed') this.fail(error as Error); throw error; });
     return this.attaching;
   }
 
@@ -539,7 +547,12 @@ export class Flows {
       const timer = setTimeout(() => abandon(new Error('The audio worklet did not start')), 15000);
       node.port.onmessage = (event: MessageEvent<FromProcessor>) => {
         const message = event.data;
-        if (message.type === 'ready') { clearTimeout(timer); resolve(); }
+        if (message.type === 'ready') {
+          clearTimeout(timer);
+          // Disposed while the worklet started: release it before it can connect.
+          if (this.currentState === 'disposed') abandon(new Error('This instrument was disposed'));
+          else resolve();
+        }
         else if (message.type === 'error' && message.request === undefined && !this.node) { clearTimeout(timer); abandon(new Error(message.message)); }
         else this.receive(message);
       };

@@ -85,7 +85,12 @@
 
       // Sound starts on the first gesture; the button is for keyboard users.
       start.hidden = false;
-      start.addEventListener('click', () => flows.start());
+      // start() rejects if the browser will not play audio; say so instead of failing silently.
+      const begin = () => flows.start().catch((problem) => {
+        error.hidden = false;
+        error.textContent = `Sound could not start: ${problem.message}`;
+      });
+      start.addEventListener('click', begin);
       flows.on('state', ({ state }) => { start.hidden = state === 'running'; });
 
       riff.forEach((note, index) => {
@@ -95,7 +100,7 @@
         pad.textContent = note;
         pad.setAttribute('aria-pressed', 'false');
         pad.setAttribute('aria-keyshortcuts', String(index + 1));
-        const down = () => { flows.start(); flows.noteOn(note, 0.9); pad.setAttribute('aria-pressed', 'true'); };
+        const down = () => { begin(); flows.noteOn(note, 0.9); pad.setAttribute('aria-pressed', 'true'); };
         const up = () => { flows.noteOff(note); pad.setAttribute('aria-pressed', 'false'); };
         pad.addEventListener('pointerdown', (event) => { down(); pad.setPointerCapture(event.pointerId); });
         pad.addEventListener('pointerup', up);
@@ -105,7 +110,7 @@
         pads.append(pad);
       });
       const padFor = (key) => pads.children[Number(key) - 1];
-      addEventListener('keydown', (event) => { const pad = padFor(event.key); if (pad && !event.repeat && !event.metaKey && !event.ctrlKey) { flows.start(); flows.noteOn(riff[event.key - 1], 0.9); pad.setAttribute('aria-pressed', 'true'); } });
+      addEventListener('keydown', (event) => { const pad = padFor(event.key); if (pad && !event.repeat && !event.metaKey && !event.ctrlKey) { begin(); flows.noteOn(riff[event.key - 1], 0.9); pad.setAttribute('aria-pressed', 'true'); } });
       addEventListener('keyup', (event) => { const pad = padFor(event.key); if (pad) { flows.noteOff(riff[event.key - 1]); pad.setAttribute('aria-pressed', 'false'); } });
 
       // Sliders from params(): any parameter works; these two shape the bite.

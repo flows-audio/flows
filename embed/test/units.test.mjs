@@ -87,6 +87,15 @@ assert.equal(formatLiteral(cutoff, 3300, '2.4khz'), '3.3khz');
 assert.equal(formatLiteral(findParameter(list, 'amp.R'), 0.52, '380ms'), '520ms');
 assert.equal(formatLiteral(findParameter(list, 'amp.S'), 0.4, '0.55'), '0.4');
 
+// Without a declared range, the inferred one still holds the authored value.
+const unranged = (name, unit, value) => describe([{ id: `x.${name}`, name, unit, value, live: true, hasRange: false, scale: 'linear', scaleOffset: 0, logarithmic: false, from: -1, to: -1 }])[0];
+const high = unranged('cutoff', 'hertz', 24000);
+assert.ok(high.min <= 24000 && high.max >= 24000 && high.scale === 'log', 'a high frequency fits its range');
+const zero = unranged('cutoff', 'hertz', 0);
+assert.ok(zero.min <= 0 && zero.max > 0 && zero.scale === 'linear', 'zero hertz needs a linear range');
+const quiet = unranged('level', 'decibels', -80);
+assert.ok(quiet.min <= -80, 'a quiet level fits its range');
+
 // The editor's highlighting: keywords, numbers, and live numbers as drag handles.
 const { highlight, tokenize } = await importModule('../src/elements/code.ts');
 const kinds = tokenize('import x\ncutoff: 2.4khz  # note').filter((t) => t.kind).map((t) => t.kind);
