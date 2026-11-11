@@ -21,7 +21,7 @@ export interface FlowsModule {
   _flows_release_midi(): void;
   _flows_fetch_complete(call: number, status: number, body: number, length: number, error: number): void;
   onFlowsAudio?: (state: string, node: number) => void;
-  flowsFetch?: (call: number, url: string, body: Uint8Array, headers: Record<string, string>, timeoutMs: number, limit: number) => void;
+  flowsFetch?: (call: number, url: string, body: Uint8Array<ArrayBuffer>, headers: Record<string, string>, timeoutMs: number, limit: number) => void;
   flowsFetchAbort?: (call: number) => void;
 }
 
