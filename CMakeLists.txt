@@ -220,6 +220,9 @@ if(EMSCRIPTEN)
         "--embed-file=${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/samples/flows-stereo.wav@/bundle/samples/flows-stereo.wav")
     set_property(TARGET flows_web APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test/presets")
 
+    # Flows Embed: the embeddable instrument (embed/), without threads.
+    include(embed/embed.cmake)
+
     # Command-line programs and tests run under Node with the real file system.
     function(flows_node_program target)
         target_link_options(${target} PRIVATE -sENVIRONMENT=node -sNODERAWFS=1 -sEXIT_RUNTIME=1
@@ -272,6 +275,16 @@ if(BUILD_TESTING AND EMSCRIPTEN)
         add_test(NAME render_parity COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/test/tools/render_parity.py"
             --native "${FLOWS_NATIVE_CLI}" --wasm $<TARGET_FILE:flows> --node "${CMAKE_CROSSCOMPILING_EMULATOR}")
         set_tests_properties(render_parity PROPERTIES TIMEOUT 600)
+    endif()
+    # Flows Embed: the built package (npm run build --prefix embed) and its engine.
+    add_test(NAME embed_package_ssr COMMAND "${CMAKE_CROSSCOMPILING_EMULATOR}" "${CMAKE_CURRENT_SOURCE_DIR}/embed/test/ssr.test.mjs")
+    add_test(NAME embed_package_units COMMAND "${CMAKE_CROSSCOMPILING_EMULATOR}" "${CMAKE_CURRENT_SOURCE_DIR}/embed/test/units.test.mjs")
+    if(FLOWS_NATIVE_CLI)
+        # The embed engine, driven through the worklet's JavaScript wrapper,
+        # must render every test case and preset exactly like the native CLI.
+        add_test(NAME embed_render_parity COMMAND "${CMAKE_CROSSCOMPILING_EMULATOR}" "${CMAKE_CURRENT_SOURCE_DIR}/embed/test/render-parity.mjs"
+            --native "${FLOWS_NATIVE_CLI}" --wasm $<TARGET_FILE:flows_embed>)
+        set_tests_properties(embed_render_parity PROPERTIES TIMEOUT 300)
     endif()
     if(FLOWS_NATIVE_CONFORMANCE)
         add_test(NAME protocol_parity COMMAND "${CMAKE_CROSSCOMPILING_EMULATOR}" "${CMAKE_CURRENT_SOURCE_DIR}/protocol/test/protocol.test.mjs"

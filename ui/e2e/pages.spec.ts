@@ -18,3 +18,14 @@ test('starts without isolation headers under a subpath', async ({ page }) => {
   expect(await page.evaluate(() => globalThis.crossOriginIsolated)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('leaves the embed pages under the same site unisolated', async ({ page }) => {
+  // Visiting the app installs its isolation worker for the whole /flows/ scope.
+  await page.goto(site);
+  await expect(page.locator('.program-state.ready')).toBeVisible();
+  expect(await page.evaluate(() => globalThis.crossOriginIsolated)).toBe(true);
+  await page.goto(`${site}embed/examples/index.html`);
+  await expect(page.getByRole('heading', { name: 'Flows Embed' })).toBeVisible();
+  expect(await page.evaluate(() => globalThis.crossOriginIsolated)).toBe(false);
+  await page.waitForFunction(() => (document.querySelector('flows-instrument') as HTMLElement & { flows?: { state: string } })?.flows?.state === 'ready');
+});

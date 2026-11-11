@@ -1,11 +1,17 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 
 // Shared memory between the page, its threads and the audio worklet needs
 // cross-origin isolation. Production hosts send the same headers (public-web/_headers).
 const isolation = { 'Cross-Origin-Opener-Policy': 'same-origin', 'Cross-Origin-Embedder-Policy': 'require-corp' };
+
+const embed = resolve(__dirname, '../embed/dist');
+const walk = (folder: string): string[] => readdirSync(folder).flatMap(name => {
+  const path = join(folder, name);
+  return statSync(path).isDirectory() ? walk(path) : [path];
+});
 
 // Serves and bundles the WebAssembly core from `cmake --build --preset web`.
 function flowsCore(directory: string): Plugin {
@@ -32,6 +38,12 @@ function flowsCore(directory: string): Plugin {
       for (const [fileName, file] of Object.entries(files)) {
         if (!existsSync(file.path)) this.error(missing(file.path));
         this.emitFile({ type: 'asset', fileName, source: readFileSync(file.path) });
+      }
+      // Flows Embed, published at <site>/embed/ for other sites to load.
+      if (!existsSync(resolve(embed, 'flows-embed.js'))) this.error(`Missing ${embed}. Build the embed first: npm ci --prefix embed && npm run build --prefix embed`);
+      for (const path of walk(embed)) {
+        const name = relative(embed, path).split('\\').join('/');
+        if (!name.startsWith('types/')) this.emitFile({ type: 'asset', fileName: `embed/${name}`, source: readFileSync(path) });
       }
     },
     transformIndexHtml: html => html.replace('</head>', [

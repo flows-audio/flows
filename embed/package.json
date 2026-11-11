@@ -1,0 +1,37 @@
+{
+  "name": "@flows-audio/embed",
+  "version": "1.1.4",
+  "description": "Embed a playable Flows instrument in any web page and style it like the page itself.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "repository": { "type": "git", "url": "git+https://github.com/flows-audio/flows.git", "directory": "embed" },
+  "homepage": "https://flows-audio.github.io/flows/embed/",
+  "keywords": ["synthesizer", "web-audio", "audio-worklet", "webassembly", "web-components", "instrument"],
+  "sideEffects": ["./dist/*.js"],
+  "main": "./dist/flows-embed.js",
+  "module": "./dist/flows-embed.js",
+  "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/flows-embed.iife.js",
+  "jsdelivr": "./dist/flows-embed.iife.js",
+  "exports": {
+    ".": { "types": "./dist/types/index.d.ts", "default": "./dist/flows-embed.js" },
+    "./core": { "types": "./dist/types/core.d.ts", "default": "./dist/flows-embed-core.js" },
+    "./elements": { "types": "./dist/types/elements/index.d.ts", "default": "./dist/flows-embed-elements.js" },
+    "./wasm": "./dist/flows-embed.wasm",
+    "./worklet": "./dist/flows-embed-worklet.js",
+    "./presets/*": "./dist/presets/*",
+    "./skill": "./dist/skill/SKILL.md",
+    "./package.json": "./package.json"
+  },
+  "files": ["dist", "README.md", "LICENSE", "THIRD_PARTY.md"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node test/ssr.test.mjs && node test/units.test.mjs",
+    "parity": "node test/render-parity.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "typescript": "5.7.3"
+  }
+}

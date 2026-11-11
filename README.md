@@ -74,6 +74,21 @@ to keep copies. Sound starts with your first key press or click. Web MIDI
 keyboards work where the browser supports them (not in Safari). See
 [Flows in the browser](docs/WEB.md) for hosting, shortcuts and limits.
 
+### On your own site
+
+[Flows Embed](embed/README.md) puts a playable instrument on any web page with
+one script tag, without special server headers, and lets the page restyle
+every part of it:
+
+```html
+<script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+<flows-instrument preset="soft-keys"></flows-instrument>
+```
+
+See the [examples](https://flows-audio.github.io/flows/embed/) and the
+[integration guide](embed/skill/SKILL.md), which also works as a skill for
+coding agents.
+
 ## A small instrument
 
 ```flows
@@ -179,6 +194,7 @@ For the browser build, install Emscripten 6.0.13 and run:
 ```sh
 emcmake cmake --preset web
 cmake --build --preset web --parallel 2
+npm ci --prefix embed && npm run build --prefix embed
 npm ci --prefix ui && npm run build:web --prefix ui
 npm run preview:web --prefix ui
 ```
@@ -194,8 +210,9 @@ and [THIRD_PARTY.md](THIRD_PARTY.md) for dependencies and attribution.
 ## License
 
 The complete application is licensed under **AGPL-3.0-only**. The independent
-compiler (`src/compiler/`) and DSP engine (`src/engine/`) remain **Apache-2.0**
-under their directory licenses. Linked JUCE modules and other dependencies
+compiler (`src/compiler/`), DSP engine (`src/engine/`) and the embeddable
+instrument (`embed/`, built only from those two) are **Apache-2.0** under their
+directory licenses. Linked JUCE modules and other dependencies
 retain their own licenses. The browser build includes the license, third-party
 notices and a link to its matching source. See [LICENSE](LICENSE), [NOTICE](NOTICE) and
 [THIRD_PARTY.md](THIRD_PARTY.md). Source for each binary release is available at

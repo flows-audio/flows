@@ -159,7 +159,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: |
+            ui/package-lock.json
+            embed/package-lock.json
       - name: Fetch and verify pinned Emscripten
         run: bash .github/scripts/fetch-emsdk.sh
       - name: Native reference outputs
@@ -173,7 +175,12 @@ jobs:
           -DFLOWS_NATIVE_CLI="$PWD/build/flows"
           -DFLOWS_NATIVE_CONFORMANCE="$PWD/build/conformance/native.json"
       - run: cmake --build --preset web --parallel 2
-      - name: Portable suites, protocol and render parity as WebAssembly
+      - name: Flows Embed package
+        run: |
+          npm ci --prefix embed
+          npm audit --prefix embed --audit-level=high
+          npm run build --prefix embed
+      - name: Portable suites, protocol, render parity and the embed as WebAssembly
         run: ctest --preset web --output-junit results.xml
       - run: npm ci --prefix ui
       - run: npm run build:web --prefix ui

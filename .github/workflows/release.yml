@@ -120,7 +120,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: ui/package-lock.json
+          cache-dependency-path: |
+            ui/package-lock.json
+            embed/package-lock.json
       - name: Verify exact release tag
         id: release_tag
         run: |
@@ -140,6 +142,11 @@ jobs:
           -DFLOWS_NATIVE_CLI="$PWD/build/flows"
           -DFLOWS_NATIVE_CONFORMANCE="$PWD/build/conformance/native.json"
       - run: cmake --build --preset web --parallel 2
+      - name: Flows Embed package
+        run: |
+          npm ci --prefix embed
+          npm audit --prefix embed --audit-level=high
+          npm run build --prefix embed
       - run: ctest --preset web --output-junit results.xml
       - run: npm ci --prefix ui
       - run: npm audit --prefix ui --audit-level=high

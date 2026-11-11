@@ -5,11 +5,15 @@
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));
 
+// Flows Embed (embed/) runs without isolation on any site, including its own
+// example pages here; leave those responses untouched.
+const embed = new URL('embed/', self.registration.scope).pathname;
+
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
   // Other origins (the assistant's API) keep their own CORS handling.
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith(embed)) return;
   // The engine keeps fixed file names; revalidate it so a new page never
   // starts with the previous engine.
   const fresh = request.mode !== 'navigate' && url.pathname.includes('/core/');

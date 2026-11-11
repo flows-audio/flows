@@ -4,9 +4,10 @@ Copyright 2026 Flows contributors
 The complete application is licensed under GNU Affero General Public License
 version 3 only (AGPL-3.0-only), as reproduced in LICENSE.
 
-The independent compiler in src/compiler/ and DSP engine in src/engine/ are
-licensed under Apache License version 2.0 (Apache-2.0), as reproduced in each
-directory's LICENSE and licenses/Apache-2.0.txt.
+The independent compiler in src/compiler/, DSP engine in src/engine/ and the
+embeddable instrument in embed/ (which contains only those two and its own
+code) are licensed under Apache License version 2.0 (Apache-2.0), as
+reproduced in each directory's LICENSE and licenses/Apache-2.0.txt.
 
 Third-party code and assets retain their original licenses and attribution.
 THIRD_PARTY.md and licenses/third-party/ describe and reproduce their notices.

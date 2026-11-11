@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Code and sound</title>
+  <script type="module" src="https://flows-audio.github.io/flows/embed/flows-embed.js"></script>
+  <style>body { font: 16px system-ui, sans-serif; max-width: 760px; margin: 24px auto; display: grid; gap: 32px; }</style>
+</head>
+<body>
+  <!-- The default layout with its source. -->
+  <flows-instrument id="default" preset="soft-keys" label="Soft keys" code></flows-instrument>
+
+  <!-- A custom layout: the page places the code, a knob and the keys. -->
+  <flows-instrument id="custom" label="Saw">
+    <script type="text/flows">
+      import standard as std
+      from lib.osc import ClassicSaw
+      from lib.filt import ClassicFilt
+      from lib.env import ClassicADSR
+
+      Inst.sigstream(std.event.keys.poly()) as key:
+          osc = ClassicSaw.make()
+          filt = ClassicFilt.make()
+          env = ClassicADSR.make()
+          tone = filt(osc(pitch: key.pitch, level: -12db), mode: lowpass, cutoff: 1.2khz, resonance: 0.2)
+          amp = env(gate: key.gate, trigger: key.trigger, A: 5ms, D: 200ms, S: 0.7, R: 300ms)
+          return tone * amp * key.velocity
+    </script>
+    <flows-code></flows-code>
+    <flows-knob param="cutoff"></flows-knob>
+    <flows-keys start="C3" octaves="1"></flows-keys>
+  </flows-instrument>
+</body>
+</html>

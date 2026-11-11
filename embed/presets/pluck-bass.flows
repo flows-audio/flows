@@ -1,0 +1,25 @@
+# Pluck bass: a mono bass with a snappy filter envelope and glide.
+import standard as std
+from lib.osc import ClassicSaw, ClassicSine
+from lib.filt import ClassicFilt
+from lib.env import ClassicADSR
+from lib.fx import ClassicDistortion
+
+class Snap(ClassicFilt):
+    def init:
+        self.register_knob(resonance, default=0.35, range=(0, 0.9), step=0.01)
+
+Inst.sigstream(std.event.keys.mono(priority: last, retrigger: each_press, glide: 30ms)) as key:
+    saw = ClassicSaw.make()
+    sine = ClassicSine.make()
+    filt = Snap.make()
+    fenv = ClassicADSR.make()
+    aenv = ClassicADSR.make()
+    drive = ClassicDistortion.make()
+
+    contour = fenv(gate: key.gate, trigger: key.trigger, retrigger_from: zero, A: 1ms, D: 160ms, S: 0.1, R: 80ms)
+    raw = saw(pitch: key.pitch, level: -14db) + sine(pitch: key.pitch, octave: -1, level: -12db)
+    bite = filt(raw, mode: lowpass, cutoff: 180hz + contour * 2.6khz, resonance: 0.35)
+    grit = drive(bite, mode: softclip, drive: 6db, mix: 0.4, output: -3db)
+    amp = aenv(gate: key.gate, trigger: key.trigger, retrigger_from: current, A: 2ms, D: 300ms, S: 0.6, R: 90ms)
+    return grit * amp * key.velocity

@@ -40,15 +40,19 @@ mock AI endpoint are isolated from the user's documents and credentials.
 ```sh
 emcmake cmake --preset web
 cmake --build --preset web --parallel 2
+npm ci --prefix embed && npm run build --prefix embed
 ctest --preset web
 npm run build:web --prefix ui
 ```
 
 `ctest --preset web` runs the portable test suites compiled to WebAssembly in
-Node. To compare against native outputs, configure with
+Node, and tests the Flows Embed package built by `npm run build --prefix embed`
+(its engine is the `flows_embed` target). The site build copies that package
+to `embed/` on the site. To compare against native outputs, configure with
 `-DFLOWS_NATIVE_CLI=$PWD/build/flows` and
 `-DFLOWS_NATIVE_CONFORMANCE=$PWD/build/conformance/native.json` (produced by
-`ctest --preset dev`); this adds `render_parity` and `protocol_parity`.
+`ctest --preset dev`); this adds `render_parity`, `embed_render_parity` and
+`protocol_parity`.
 Browser tests: `npx --prefix ui playwright install` once, then
 `npm run test:web --prefix ui`. `python3 tools/package_web.py` packages
 `ui/dist-web` with licenses and the source link as `dist/Flows-<version>-web.zip`.

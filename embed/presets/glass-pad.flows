@@ -1,0 +1,26 @@
+# Glass pad: slow, wide and bright, with a breathing filter.
+import standard as std
+from lib.osc import ClassicSaw
+from lib.filt import ClassicFilt
+from lib.env import ClassicADSR
+from lib.mod import ClassicLFO
+
+class Shimmer(ClassicFilt):
+    def init:
+        self.register_knob(cutoff, default=1.8khz, range=(200hz, 9khz), step=10hz, scale=log, update=live)
+        self.register_knob(resonance, default=0.3, range=(0, 0.85), step=0.01)
+
+Inst.sigstream(std.event.keys.poly()) as key:
+    osc = ClassicSaw.make()
+    lfo = ClassicLFO.make()
+    filt = Shimmer.make()
+    env = ClassicADSR.make()
+
+    breath = lfo(shape: sine, rate: 0.3hz, bipolar: true)
+    raw = osc(pitch: key.pitch, level: -22db, unison: 5, detune: 18, spread: 0.9)
+    shimmer = filt(raw, mode: lowpass, cutoff: 1.8khz, resonance: 0.3)
+    amp = env(
+        gate: key.gate, trigger: key.trigger, retrigger_from: current,
+        A: 260ms, D: 900ms, S: 0.7, R: 1.4s
+    )
+    return shimmer * amp * (0.85 + breath * 0.15) * key.velocity

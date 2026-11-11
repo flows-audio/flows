@@ -12,7 +12,7 @@ read-only repository tokens and no user credentials or audio hardware.
 | Memory and undefined behavior | Linux Clang AddressSanitizer, leak detection and UndefinedBehaviorSanitizer over the portable suite |
 | Editor and publication checks | Locked frontend install, high-severity dependency audit, TypeScript/build, UI regressions and publication hygiene |
 | macOS app and plugins | arm64 release build with exact JUCE 8.0.7 revision; standalone, AU/VST3 host tests and compiler/editor integration |
-| Browser build (WebAssembly) | Pinned Emscripten 6.0.13; the portable suites as WebAssembly, native/WebAssembly protocol and render parity, browser notices, and Playwright tests of the built site in Chromium, Firefox and WebKit, with a virtual audio output so Chromium and Firefox must play through the audio worklet. Stores the deployable site ZIP |
+| Browser build (WebAssembly) | Pinned Emscripten 6.0.13; the portable suites as WebAssembly, native/WebAssembly protocol and render parity, the Flows Embed package (build, SSR import, and render parity of its single-threaded engine against the native CLI), browser notices, and Playwright tests of the built site and of the embed on a cross-origin page without isolation in Chromium, Firefox and WebKit, with a virtual audio output so Chromium and Firefox must play through the audio worklet. Stores the deployable site ZIP |
 | CI | Stable aggregate check; fails if any dependency fails, is skipped or is cancelled |
 
 There are no path filters: documentation-only PRs still produce the required

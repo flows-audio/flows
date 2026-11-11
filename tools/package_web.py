@@ -28,7 +28,8 @@ def main() -> int:
     if tag != f'v{version}':
         raise SystemExit(f'Tag {tag} does not match VERSION {version}')
     site = ROOT / 'ui' / 'dist-web'
-    for required in ('index.html', '_headers', 'core/flows-core.mjs', 'core/flows-core.wasm'):
+    for required in ('index.html', '_headers', 'core/flows-core.mjs', 'core/flows-core.wasm',
+                     'embed/flows-embed.js', 'embed/flows-embed.iife.js', 'embed/flows-embed.wasm'):
         if not (site / required).is_file():
             raise SystemExit(f'Missing {site / required}. Run: npm run build:web --prefix ui')
     emscripten = ROOT / 'licenses' / 'third-party' / 'emscripten'
